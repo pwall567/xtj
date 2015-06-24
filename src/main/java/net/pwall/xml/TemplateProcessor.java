@@ -816,11 +816,6 @@ public class TemplateProcessor {
         return n < str.length() ? str.substring(0, n) : str;
     }
 
-//    public static boolean isFloat(String num) {
-//        return num != null &&
-//                (num.indexOf('.') >= 0 || num.indexOf('e') >= 0 || num.indexOf('E') >= 0);
-//    }
-
     public static boolean isFloating(Object obj) {
         return obj instanceof Double || obj instanceof Float;
     }
