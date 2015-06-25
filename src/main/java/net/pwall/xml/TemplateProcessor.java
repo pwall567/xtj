@@ -318,7 +318,8 @@ public class TemplateProcessor {
         context = context.getParent();
     }
 
-    private void processError(Element element, DefaultHandler2 formatter)
+    private void processError(Element element,
+            @SuppressWarnings("unused") DefaultHandler2 formatter)
             throws Expression.ExpressionException {
         // TODO check - is this how we want to handle this?
         String text = substAttr(element, textAttrName);
@@ -343,13 +344,15 @@ public class TemplateProcessor {
         }
     }
 
-    private void processInclude(Element element, DefaultHandler2 formatter)
+    private void processInclude(Element element,
+            @SuppressWarnings("unused") DefaultHandler2 formatter)
             throws Expression.ExpressionException {
         // TODO implement <include>
         throw new TemplateException(element, "Can't handle <include>");
     }
 
-    private void processSet(Element element, DefaultHandler2 formatter)
+    private void processSet(Element element,
+            @SuppressWarnings("unused") DefaultHandler2 formatter)
             throws Expression.ExpressionException {
         String name = substAttr(element, nameAttrName);
         if (!isValidName(name))
@@ -617,7 +620,8 @@ public class TemplateProcessor {
         context = context.getParent();
     }
 
-    private void processComment(Element element, DefaultHandler2 formatter) {
+    private void processComment(@SuppressWarnings("unused") Element element,
+            @SuppressWarnings("unused") DefaultHandler2 formatter) {
         // TODO complete this
     }
 
@@ -975,7 +979,7 @@ public class TemplateProcessor {
      * Template Context - includes Name Resolver for Expression Language.
      */
     public static class TemplateContext implements Expression.ExtendedResolver {
-    
+
         private TemplateContext parent;
         private Element element;
         private Map<String, Expression> map;
