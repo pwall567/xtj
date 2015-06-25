@@ -37,8 +37,23 @@ import org.xml.sax.helpers.AttributesImpl;
 
 /**
  * XML Template Processor for Java
+ *
+ * @author Peter Wall
  */
 public class TemplateProcessor {
+
+    // TODO list:
+    // 1. Reconsider use of exceptions - make TemplateException a subclass of UserError?
+    // 2. Implement <include>
+    // 3. Consider <set> with contents - allocate element itself to a variable to allow access
+    //    to elements contained within it?
+    // 4. In Expression - allow JavaScript object syntax?
+    //    e.g. <xt:set name="array" value="['a','b','c']">
+    // 5. Consider passing context object on each call - avoids potential error in unwinding
+    // 6. Update namespace version number to 1.0 (or greater?)
+    // 7. Consider a "for" attribute (or "while") to go with "if"
+    // 8. Block use of <set> to modify an existing variable?
+    // 9. Is <macro> the best name for this functionality?
 
     public static final String defaultNamespace = "http://pwall.net/xml/xt/0.1";
 
