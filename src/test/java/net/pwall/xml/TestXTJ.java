@@ -31,7 +31,7 @@ public class TestXTJ {
 
     @Test
     public void test1() throws Exception {
-        TemplateProcessor tp = new TemplateProcessor(templateDOM);
+        TemplateProcessor tp = new TemplateProcessor(templateDOM, null);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         tp.process(baos);
         byte[] array = baos.toByteArray();

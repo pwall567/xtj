@@ -9,6 +9,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Array;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -54,6 +55,7 @@ public class TemplateProcessor {
     // 7. Consider a "for" attribute (or "while") to go with "if"
     // 8. Block use of <set> to modify an existing variable?
     // 9. Is <macro> the best name for this functionality?
+    //10. Add logging
 
     public static final String defaultNamespace = "http://pwall.net/xml/xt/0.1";
 
@@ -101,6 +103,7 @@ public class TemplateProcessor {
     private static final String whitespaceIndent = "indent";
     private static final String optionInclude = "include";
 
+    private URL url;
     private Document dom;
     private Expression.Parser parser;
     private TemplateContext context;
@@ -108,14 +111,23 @@ public class TemplateProcessor {
     private String whitespace;
     private boolean prefixXML;
 
-    public TemplateProcessor(Document dom) {
+    public TemplateProcessor(Document dom, URL url) {
         this.dom = Objects.requireNonNull(dom);
+        this.url = url;
         parser = new Expression.Parser();
         parser.setConditionalAllowed(true);
         context = new TemplateContext(null, dom.getDocumentElement());
         namespace = defaultNamespace;
         whitespace = null;
         prefixXML = false;
+    }
+
+    public URL getUrl() {
+        return url;
+    }
+
+    public void setUrl(URL url) {
+        this.url = url;
     }
 
     public String getNamespace() {
@@ -877,8 +889,10 @@ public class TemplateProcessor {
 
     public static void main(String[] args) {
         try {
-            File template = null;
-            File in = null;
+            File currentDir = (new File(".")).getAbsoluteFile();
+            URL baseURL = new URL("file://" + currentDir);
+            URL template = null;
+            URL in = null;
             File out = null;
             for (int i = 0; i < args.length; i++) {
                 String arg = args[i];
@@ -887,18 +901,14 @@ public class TemplateProcessor {
                         throw new UserError("-template with no pathname");
                     if (template != null)
                         throw new UserError("Duplicate -template");
-                    template = new File(args[i]);
-                    if (!template.exists() || !template.isFile())
-                        throw new UserError("-template file does not exist - " + args[i]);
+                    template = new URL(baseURL, args[i]);
                 }
                 else if (arg.equals("-in")) {
                     if (++i >= args.length || args[i].startsWith("-"))
                         throw new UserError("-in with no pathname");
                     if (in != null)
                         throw new UserError("Duplicate -in");
-                    in = new File(args[i]);
-                    if (!in.exists() || !in.isFile())
-                        throw new UserError("-in file does not exist - " + args[i]);
+                    in = new URL(baseURL, args[i]);
                 }
                 else if (arg.equals("-out")) {
                     if (++i >= args.length || args[i].startsWith("-"))
@@ -934,17 +944,18 @@ public class TemplateProcessor {
         }
     }
 
-    private static void run(OutputStream os, File in, File template)
+    private static void run(OutputStream os, URL in, URL template)
             throws ParserConfigurationException, SAXException, IOException,
             Expression.ExpressionException {
+        Objects.requireNonNull(template);
         Document templateDOM =
-                XML.getDocumentBuilderNS().parse(Objects.requireNonNull(template));
-        TemplateProcessor processor = new TemplateProcessor(templateDOM);
+                XML.getDocumentBuilderNS().parse(template.openStream(), template.toString());
+        TemplateProcessor processor = new TemplateProcessor(templateDOM, template);
         processor.addNamespace("http://java.sun.com/jsp/jstl/functions",
                 Functions.class.getName());
         // should the above be variable? command-line args?
         if (in != null) {
-            Document inputDOM = XML.parse(in);
+            Document inputDOM = XML.getDocumentBuilder().parse(in.openStream(), in.toString());
             processor.setVariable("page", new ElementWrapper(inputDOM.getDocumentElement()));
         }
         processor.process(os);
