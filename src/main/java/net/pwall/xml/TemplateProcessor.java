@@ -189,7 +189,7 @@ public class TemplateProcessor {
                 else if (outputAttr.equalsIgnoreCase(outputHTML))
                     processHTML(os);
                 else
-                    throw new TemplateException(documentElement,
+                    throw new TemplateException(documentElement, outputAttrName,
                             "Illegal " + outputAttrName + ": " + outputAttr);
             }
             else
@@ -261,12 +261,12 @@ public class TemplateProcessor {
                     return;
             }
             catch (Expression.ExpressionException eee) {
-                throw new TemplateException(ifAttr,
+                throw new TemplateException(element, ifAttr.getName(),
                         "Error in \"if\" attribute - " + test + '\n' +eee.getMessage());
             }
         }
         if (XML.matchNS(element, errorElementName, namespace))
-            processError(element, formatter);
+            processError(element);
         else if (XML.matchNS(element, doctypeElementName, namespace))
             processDoctype(element, formatter);
         else if (XML.matchNS(element, includeElementName, namespace))
@@ -333,11 +333,9 @@ public class TemplateProcessor {
         context = context.getParent();
     }
 
-    private void processError(Element element,
-            @SuppressWarnings("unused") DefaultHandler2 formatter) throws TemplateException {
-        // TODO check - is this how we want to handle this?
+    private void processError(Element element) throws TemplateException {
         String text = substAttr(element, textAttrName);
-        throw new TemplateException(element, !isEmpty(text) ? text : "Error directive");
+        throw new TemplateException(element, !isEmpty(text) ? text : "Error element");
     }
 
     private void processDoctype(Element element, DefaultHandler2 formatter)
@@ -373,14 +371,7 @@ public class TemplateProcessor {
             throw new TemplateException(element, "Can't handle <set document= >");
         // TODO should be able to do this in Java
         String value = substAttr(element, valueAttrName);
-        try {
-            Expression exp = parser.parseExpression(value, context);
-            context.setVariable(name, exp.evaluate());
-        }
-        catch (Expression.ExpressionException e) {
-            throw new TemplateException(element, "Error in value - " + value + '\n' +
-                    e.getMessage());
-        }
+        context.setVariable(name, evaluate(value, element, valueAttrName));
         if (!isElementEmpty(element))
             throw new TemplateException(element, "Illegal content");
         // TODO allow content - if it contains elements, store as an ElementWrapper;
@@ -397,7 +388,7 @@ public class TemplateProcessor {
             testResult = parser.parseExpression(test, context).asBoolean();
         }
         catch (Expression.ExpressionException e) {
-            throw new TemplateException(element,
+            throw new TemplateException(element, testAttrName,
                     "Error in test - " + test + '\n' + e.getMessage());
         }
         if (testResult)
@@ -419,7 +410,7 @@ public class TemplateProcessor {
                             testResult = parser.parseExpression(test, context).asBoolean();
                         }
                         catch (Expression.ExpressionException e) {
-                            throw new TemplateException(childElement,
+                            throw new TemplateException(childElement, testAttrName,
                                     "Error in test - " + test + '\n' + e.getMessage());
                         }
                     }
@@ -466,26 +457,17 @@ public class TemplateProcessor {
             throw new TemplateException(element, "<for> must specify iteration type");
     }
 
-    private Object evaluate(String str, Element element, String attrName)
-            throws TemplateException {
-        try {
-            return parser.parseExpression(str, context).evaluate();
-        }
-        catch (Expression.ExpressionException e) {
-            Attr attr = element.getAttributeNode(attrName);
-            throw new TemplateException(attr == null ? element : attr,
-                "Error in expression evaluation");
-        }
-    }
-
     private void processForSequenceInt(Element element, DefaultHandler2 formatter, String name,
             Object from, Object to, Object by) throws TemplateException {
         // note - "to" value is exclusive; from="0" to="4" will perform 0,1,2,3
-        int fromValue = from == null ? 0 : intValue(from, element, "<for> from value invalid");
-        int toValue = to == null ? 0 : intValue(to, element, "<for> to value invalid");
-        int byValue = by == null ? 1 : intValue(by, element, "<for> by value invalid");
+        int fromValue = from == null ? 0 :
+                intValue(from, element, fromAttrName, "<for> from value invalid");
+        int toValue = to == null ? 0 :
+                intValue(to, element, toAttrName, "<for> to value invalid");
+        int byValue = by == null ? 1 :
+                intValue(by, element, byAttrName, "<for> by value invalid");
         if (byValue <= 0)
-            throw new TemplateException(element, "<for> by value invalid");
+            throw new TemplateException(element, byAttrName, "<for> by value invalid");
         if (fromValue != toValue) {
             context = new TemplateContext(context, element);
             if (fromValue < toValue) {
@@ -508,24 +490,27 @@ public class TemplateProcessor {
         }
     }
 
-    private int intValue(Object obj, Element elem, String msg) throws TemplateException {
+    private int intValue(Object obj, Element elem, String attrName, String msg)
+            throws TemplateException {
         try {
             return Expression.asInt(obj);
         }
         catch (Expression.IntCoercionException e) {
-            throw new TemplateException(elem, msg);
+            throw new TemplateException(elem, attrName, msg);
         }
     }
 
     private void processForSequenceFloat(Element element, DefaultHandler2 formatter,
             String name, Object from, Object to, Object by) throws TemplateException {
         // note - "to" value is exclusive; from="0" to="4" will perform 0,1,2,3
-        double fromValue = from == null ? 0.0 : doubleValue(from, element,
-                "<for> from value invalid");
-        double toValue = to == null ? 0.0 : doubleValue(to, element, "<for> to value invalid");
-        double byValue = by == null ? 1.0 : doubleValue(by, element, "<for> by value invalid");
+        double fromValue = from == null ? 0.0 :
+                doubleValue(from, element, fromAttrName, "<for> from value invalid");
+        double toValue = to == null ? 0.0 :
+                doubleValue(to, element, toAttrName, "<for> to value invalid");
+        double byValue = by == null ? 1.0 :
+                doubleValue(by, element, byAttrName, "<for> by value invalid");
         if (byValue <= 0.0)
-            throw new TemplateException(element, "<for> by value invalid");
+            throw new TemplateException(element, byAttrName, "<for> by value invalid");
         if (fromValue != toValue) {
             context = new TemplateContext(context, element);
             if (fromValue < toValue) {
@@ -548,12 +533,13 @@ public class TemplateProcessor {
         }
     }
 
-    private double doubleValue(Object obj, Element elem, String msg) throws TemplateException {
+    private double doubleValue(Object obj, Element elem, String attrName, String msg)
+            throws TemplateException {
         try {
             return Expression.asDouble(obj);
         }
         catch (Expression.DoubleCoercionException e) {
-            throw new TemplateException(elem, msg);
+            throw new TemplateException(elem, attrName, msg);
         }
     }
 
@@ -624,8 +610,8 @@ public class TemplateProcessor {
                                 parser.parseExpression(value, context).evaluate());
                     }
                     catch (Expression.ExpressionException e) {
-                        throw new TemplateException(childElement, "Error in value - " + value +
-                                '\n' + e.getMessage());
+                        throw new TemplateException(childElement, valueAttrName,
+                                "Error in value - " + value + '\n' + e.getMessage());
                     }
                 }
                 else
@@ -650,26 +636,18 @@ public class TemplateProcessor {
             throw new TemplateException(element, "<copy> element missing");
         // TODO if element not specified, process contents of <copy> (skipping <intercept>s)??
         context = new TemplateContext(context, element);
-        Element elementToCopy = null;
-        try {
-            Object obj = parser.parseExpression(elementName, context).evaluate();
-            if (!(obj instanceof ElementWrapper))
-                throw new TemplateException(element, "<copy> must specify element");
-            elementToCopy = ((ElementWrapper)obj).getElement();
-        }
-        catch (TemplateException te) {
-            throw te;
-        }
-        catch (Expression.ExpressionException ee) {
-            throw new TemplateException(element, "Error in element specification");
-        }
+        Object obj = evaluate(elementName, element, elementAttrName);
+        if (!(obj instanceof ElementWrapper))
+            throw new TemplateException(element, elementName, "<copy> must specify element");
+        Element elementToCopy = ((ElementWrapper)obj).getElement();
         boolean include = false;
         String opt = substAttr(element, optionAttrName);
         if (!isEmpty(opt)) {
             if (optionInclude.equals(opt))
                 include = true;
             else
-                throw new TemplateException(element, "<copy> option not recognised - " + opt);
+                throw new TemplateException(element, optionAttrName,
+                        "<copy> option not recognised - " + opt);
         }
         List<Intercept> intercepts = new ArrayList<>();
         NodeList childNodes = element.getChildNodes();
@@ -771,7 +749,7 @@ public class TemplateProcessor {
                                 attr.getNodeName(), "CDATA", substValue);
                 }
                 catch (Expression.ExpressionException eee) {
-                    throw new TemplateException(attr,
+                    throw new TemplateException(element, attr.getName(),
                             "Error in expression substitution - " + value);
                 }
             }
@@ -809,12 +787,24 @@ public class TemplateProcessor {
         }
     }
 
+    private Object evaluate(String str, Element element, String attrName)
+            throws TemplateException {
+        try {
+            return parser.parseExpression(str, context).evaluate();
+        }
+        catch (Expression.ExpressionException e) {
+            Attr attr = element.getAttributeNode(attrName);
+            throw new TemplateException(attr == null ? element : attr,
+                "Error in expression evaluation");
+        }
+    }
+
     private String substAttr(Element element, String attrName) throws TemplateException {
         try {
             return subst(element.getAttribute(attrName));
         }
         catch (Expression.ExpressionException eee) {
-            throw new TemplateException(element.getAttributeNode(attrName),
+            throw new TemplateException(element, attrName,
                     "Error in expression substitution" + '\n' + eee.getMessage());
         }
     }
@@ -879,68 +869,6 @@ public class TemplateProcessor {
         return obj instanceof Double || obj instanceof Float;
     }
 
-    public static String getXPath(Node node) {
-        StringBuilder sb = new StringBuilder();
-        if (node instanceof Attr) {
-            Attr attr = (Attr)node;
-            sb.append("/@");
-            sb.append(attr.getName());
-            node = node.getParentNode();
-        }
-        else if (node instanceof Text) {
-            sb.append("/text()");
-            Node parent = node.getParentNode();
-            if (parent != null) {
-                int count = 0;
-                int thisIndex = 0;
-                NodeList siblings = parent.getChildNodes();
-                for (int i = 0, n = siblings.getLength(); i < n; i++) {
-                    Node sibling = siblings.item(i);
-                    if (sibling == node)
-                        thisIndex = count;
-                    else if (sibling instanceof Text)
-                        count++;
-                }
-                if (count > 0)
-                    sb.append('[').append(thisIndex + 1).append(']');
-            }
-            node = node.getParentNode();
-        }
-        while (node != null && node instanceof Element) {
-            sb.insert(0, getXPathElement((Element)node));
-            sb.insert(0, '/');
-            node = node.getParentNode();
-        }
-        return sb.toString();
-    }
-
-    public static String getXPathElement(Element element) {
-        StringBuilder sb = new StringBuilder(element.getTagName());
-        String id = element.getAttribute(idAttrName);
-        if (!isEmpty(id))
-            sb.append('#').append(id);
-        else {
-            Node parent = element.getParentNode();
-            if (parent != null) {
-                String tagName = element.getTagName();
-                int count = 0;
-                int thisIndex = 0;
-                NodeList siblings = parent.getChildNodes();
-                for (int i = 0, n = siblings.getLength(); i < n; i++) {
-                    Node sibling = siblings.item(i);
-                    if (sibling == element)
-                        thisIndex = count;
-                    else if (sibling instanceof Element &&
-                            ((Element)sibling).getTagName().equals(tagName))
-                        count++;
-                }
-                if (count > 0)
-                    sb.append('[').append(thisIndex + 1).append(']');
-            }
-        }
-        return sb.toString();
-    }
-
     public static void main(String[] args) {
         try {
             File currentDir = (new File(".")).getAbsoluteFile();
@@ -987,9 +915,9 @@ public class TemplateProcessor {
         }
         catch (TemplateException te) {
             System.err.println();
-            Node node = te.getNode();
-            if (node != null)
-                System.err.println("XPath: " + getXPath(node));
+            String xpath = te.getXPath();
+            if (xpath != null)
+                System.err.println("XPath: " + xpath);
             System.err.println(te.getMessage());
         }
         catch (Exception e) {
@@ -1014,15 +942,22 @@ public class TemplateProcessor {
         processor.process(os);
     }
 
-    public static class TemplateException extends Exception { // make it UserError later
+    public static class TemplateException extends UserError {
 
         private static final long serialVersionUID = 6540965713285875008L;
 
         private Node node;
+        private String attrName;
 
         public TemplateException(Node node, String message) {
             super(message);
             this.node = node;
+        }
+
+        public TemplateException(Element element, String attrName, String message) {
+            super(message);
+            this.node = element;
+            this.attrName = attrName;
         }
 
         public TemplateException(String message) {
@@ -1031,6 +966,70 @@ public class TemplateProcessor {
 
         public Node getNode() {
             return node;
+        }
+
+        public String getAttrName() {
+            return attrName;
+        }
+
+        public String getXPath() {
+            if (node == null)
+                return null;
+            StringBuilder sb = new StringBuilder();
+            if (attrName != null)
+                sb.append("/@").append(attrName);
+            else if (node instanceof Text) {
+                sb.append("/text()");
+                Node parent = node.getParentNode();
+                if (parent != null) {
+                    int count = 0;
+                    int thisIndex = 0;
+                    NodeList siblings = parent.getChildNodes();
+                    for (int i = 0, n = siblings.getLength(); i < n; i++) {
+                        Node sibling = siblings.item(i);
+                        if (sibling == node)
+                            thisIndex = count;
+                        else if (sibling instanceof Text)
+                            count++;
+                    }
+                    if (count > 0)
+                        sb.append('[').append(thisIndex + 1).append(']');
+                }
+                node = node.getParentNode();
+            }
+            while (node != null && node instanceof Element) {
+                sb.insert(0, getXPathElement((Element)node));
+                sb.insert(0, '/');
+                node = node.getParentNode();
+            }
+            return sb.toString();
+        }
+
+        private static String getXPathElement(Element element) {
+            StringBuilder sb = new StringBuilder(element.getTagName());
+            String id = element.getAttribute(idAttrName);
+            if (!isEmpty(id))
+                sb.append('#').append(id);
+            else {
+                Node parent = element.getParentNode();
+                if (parent != null) {
+                    String tagName = element.getTagName();
+                    int count = 0;
+                    int thisIndex = 0;
+                    NodeList siblings = parent.getChildNodes();
+                    for (int i = 0, n = siblings.getLength(); i < n; i++) {
+                        Node sibling = siblings.item(i);
+                        if (sibling == element)
+                            thisIndex = count;
+                        else if (sibling instanceof Element &&
+                                ((Element)sibling).getTagName().equals(tagName))
+                            count++;
+                    }
+                    if (count > 0)
+                        sb.append('[').append(thisIndex + 1).append(']');
+                }
+            }
+            return sb.toString();
         }
 
     }
