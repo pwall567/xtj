@@ -43,9 +43,9 @@ import org.xml.sax.helpers.AttributesImpl;
  */
 public class TemplateProcessor {
 
-    // TODO list:
-    // 1. Reconsider use of exceptions - make TemplateException a subclass of UserError?
-    // 2. Implement <include>
+    // TODO list: (* means completed)
+    //*1. Reconsider use of exceptions - make TemplateException a subclass of UserError?
+    //*2. Implement <include>
     // 3. Consider <set> with contents - allocate element itself to a variable to allow access
     //    to elements contained within it?
     // 4. In Expression - allow JavaScript object syntax?
@@ -95,6 +95,7 @@ public class TemplateProcessor {
     private static final String optionAttrName = "option";
     private static final String idAttrName = "id";
     private static final String ifAttrName = "if";
+    private static final String hrefAttrName = "href";
 
     private static final String prefixYes = "yes";
     private static final String prefixNo = "no";
@@ -102,6 +103,8 @@ public class TemplateProcessor {
     private static final String whitespaceAll = "all";
     private static final String whitespaceIndent = "indent";
     private static final String optionInclude = "include";
+
+    private static Map<String, Document> documentMap = new HashMap<>();
 
     private URL url;
     private Document dom;
@@ -117,6 +120,7 @@ public class TemplateProcessor {
         parser = new Expression.Parser();
         parser.setConditionalAllowed(true);
         context = new TemplateContext(null, dom.getDocumentElement());
+        context.setURL(url);
         namespace = defaultNamespace;
         whitespace = null;
         prefixXML = false;
@@ -356,10 +360,32 @@ public class TemplateProcessor {
         }
     }
 
-    private void processInclude(Element element,
-            @SuppressWarnings("unused") DefaultHandler2 formatter) throws TemplateException {
-        // TODO implement <include>
-        throw new TemplateException(element, "Can't handle <include>");
+    private void processInclude(Element element, DefaultHandler2 formatter)
+            throws TemplateException {
+        String href = substAttr(element, hrefAttrName);
+        if (isEmpty(href))
+                throw new TemplateException(element, "HRef missing");
+        URL url = context.getURL();
+        URL includeURL = null;
+        Document included = null;
+        try {
+            includeURL = url == null ? new URL(href) : new URL(url, href);
+            included = getDocument(includeURL);
+        }
+        catch (Exception e) {
+            throw new TemplateException(element, "Error on include - " + href);
+        }
+        Element documentElement = included.getDocumentElement();
+        context = new TemplateContext(context, documentElement);
+        context.setURL(includeURL);
+        if (XML.matchNS(documentElement, templateElementName, namespace)) {
+            // TODO process attributes on included template?
+            // TODO consider forcing specification of variables used in included template
+            processElementContents(documentElement, formatter, false);
+        }
+        else
+            processElement(documentElement, formatter);
+        context = context.getParent();
     }
 
     private void processSet(Element element,
@@ -929,8 +955,7 @@ public class TemplateProcessor {
     private static void run(OutputStream os, URL in, URL template)
             throws ParserConfigurationException, SAXException, IOException, TemplateException {
         Objects.requireNonNull(template);
-        Document templateDOM =
-                XML.getDocumentBuilderNS().parse(template.openStream(), template.toString());
+        Document templateDOM = getDocument(template);
         TemplateProcessor processor = new TemplateProcessor(templateDOM, template);
         processor.addNamespace("http://java.sun.com/jsp/jstl/functions",
                 Functions.class.getName());
@@ -940,6 +965,17 @@ public class TemplateProcessor {
             processor.setVariable("page", new ElementWrapper(inputDOM.getDocumentElement()));
         }
         processor.process(os);
+    }
+
+    private static synchronized Document getDocument(URL url)
+            throws SAXException, IOException, ParserConfigurationException {
+        String urlString = url.toString();
+        Document document = documentMap.get(urlString);
+        if (document == null) {
+            document = XML.getDocumentBuilderNS().parse(url.openStream(), urlString);
+            documentMap.put(urlString, document);
+        }
+        return document;
     }
 
     public static class TemplateException extends UserError {
@@ -1044,6 +1080,7 @@ public class TemplateProcessor {
         private Map<String, Expression> map;
         private Map<String, Element> macros;
         private Map<String, String> namespaces;
+        private URL url;
 
         /**
          * Construct the <code>TemplateResolver</code>
@@ -1056,6 +1093,7 @@ public class TemplateProcessor {
             map = new HashMap<>();
             macros = new HashMap<>();
             namespaces = new HashMap<>();
+            url = parent == null ? null : parent.getURL();
         }
 
         /**
@@ -1065,6 +1103,14 @@ public class TemplateProcessor {
          */
         public TemplateContext getParent() {
             return parent;
+        }
+
+        public URL getURL() {
+            return url;
+        }
+
+        public void setURL(URL url) {
+            this.url = url;
         }
 
         /**
