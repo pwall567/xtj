@@ -56,6 +56,7 @@ public class TemplateProcessor {
     // 8. Block use of <set> to modify an existing variable?
     // 9. Is <macro> the best name for this functionality?
     //10. Add logging
+    //11. <for collection="xxx" index="aa"> (access index within collection)
 
     public static final String defaultNamespace = "http://pwall.net/xml/xt/0.1";
 
@@ -818,10 +819,9 @@ public class TemplateProcessor {
         try {
             return parser.parseExpression(str, context).evaluate();
         }
-        catch (Expression.ExpressionException e) {
-            Attr attr = element.getAttributeNode(attrName);
-            throw new TemplateException(attr == null ? element : attr,
-                "Error in expression evaluation");
+        catch (Expression.ExpressionException eee) {
+            throw new TemplateException(element, attrName,
+                "Error in expression evaluation" + '\n' + eee.getMessage());
         }
     }
 
