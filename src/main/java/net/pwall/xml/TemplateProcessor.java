@@ -8,7 +8,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.lang.reflect.Array;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -56,7 +55,7 @@ public class TemplateProcessor {
     // 8. Block use of <set> to modify an existing variable?
     // 9. Is <macro> the best name for this functionality?
     //10. Add logging
-    //11. <for collection="xxx" index="aa"> (access index within collection)
+    //*11. <for collection="xxx" index="aa"> (access index within collection)
 
     public static final String defaultNamespace = "http://pwall.net/xml/xt/0.1";
 
@@ -97,6 +96,7 @@ public class TemplateProcessor {
     private static final String idAttrName = "id";
     private static final String ifAttrName = "if";
     private static final String hrefAttrName = "href";
+    private static final String indexAttrName = "index";
 
     private static final String prefixYes = "yes";
     private static final String prefixNo = "no";
@@ -392,7 +392,7 @@ public class TemplateProcessor {
     private void processSet(Element element,
             @SuppressWarnings("unused") DefaultHandler2 formatter) throws TemplateException {
         String name = substAttr(element, nameAttrName);
-        if (!isValidName(name))
+        if (!Expression.isValidIdentifier(name))
             throw new TemplateException(element, "Name missing or invalid");
         if (!isEmpty(element.getAttribute(documentAttrName)))
             throw new TemplateException(element, "Can't handle <set document= >");
@@ -460,17 +460,25 @@ public class TemplateProcessor {
             throws TemplateException {
         // TODO document not yet handled
         String name = substAttr(element, nameAttrName);
+        if (!isEmpty(name) && !Expression.isValidIdentifier(name))
+            throw new TemplateException(element, nameAttrName, "Illegal name in <for>");
         String coll = substAttr(element, collectionAttrName);
         String from = substAttr(element, fromAttrName);
         String to = substAttr(element, toAttrName);
         String by = substAttr(element, byAttrName);
+        String index = substAttr(element, indexAttrName);
+        if (!isEmpty(index) && !Expression.isValidIdentifier(index))
+            throw new TemplateException(element, indexAttrName, "Illegal index in <for>");
         if (!isEmpty(coll)) {
             if (!isEmpty(from) || !isEmpty(to) || !isEmpty(by))
                 throw new TemplateException(element,
                         "<for> has illegal combination of attributes");
-            processForCollection(element, formatter, name, coll);
+            processForCollection(element, formatter, name, coll, index);
         }
         else if (!isEmpty(from) || !isEmpty(to) || !isEmpty(by)) {
+            if (!isEmpty(index))
+                throw new TemplateException(element,
+                        "<for> has illegal combination of attributes");
             Object fromObject = isEmpty(from) ? null : evaluate(from, element, fromAttrName);
             Object toObject = isEmpty(to) ? null : evaluate(to, element, toAttrName);
             Object byObject = isEmpty(by) ? null : evaluate(by, element, byAttrName);
@@ -571,22 +579,30 @@ public class TemplateProcessor {
     }
 
     private void processForCollection(Element element, DefaultHandler2 formatter, String name,
-            String coll) throws TemplateException {
+            String coll, String index) throws TemplateException {
         Object collObject = evaluate(coll, element, collectionAttrName);
         if (collObject != null) {
             context = new TemplateContext(context, element);
             if (collObject instanceof Map<?, ?>) {
-                for (Object obj : ((Map<?, ?>)collObject).values()) {
+                int i = 0;
+                for (Object obj : ((Map<?, ?>)collObject).values()) { // should this be keys?
                     if (!isEmpty(name))
                         context.setVariable(name, obj);
+                    if (!isEmpty(index))
+                        context.setVariable(index, Integer.valueOf(i));
                     processElementContents(element, formatter, true);
+                    i++;
                 }
             }
             else if (collObject instanceof Iterable<?>) {
+                int i = 0;
                 for (Object obj : (Iterable<?>)collObject) {
                     if (!isEmpty(name))
                         context.setVariable(name, obj);
+                    if (!isEmpty(index))
+                        context.setVariable(index, Integer.valueOf(i));
                     processElementContents(element, formatter, true);
+                    i++;
                 }
             }
             else if (collObject instanceof Object[]) {
@@ -595,17 +611,21 @@ public class TemplateProcessor {
                     Object obj = array[i];
                     if (!isEmpty(name))
                         context.setVariable(name, obj);
+                    if (!isEmpty(index))
+                        context.setVariable(index, Integer.valueOf(i));
                     processElementContents(element, formatter, true);
                 }
             }
-            else if (collObject.getClass().isArray()) {
-                for (int i = 0, n = Array.getLength(collObject); i < n; i++) {
-                    Object obj = Array.get(collObject, i);
-                    if (!isEmpty(name))
-                        context.setVariable(name, obj);
-                    processElementContents(element, formatter, true);
-                }
-            }
+//            else if (collObject.getClass().isArray()) { // unnecessary - above code does this
+//                for (int i = 0, n = Array.getLength(collObject); i < n; i++) {
+//                    Object obj = Array.get(collObject, i);
+//                    if (!isEmpty(name))
+//                        context.setVariable(name, obj);
+//                    if (!isEmpty(index))
+//                        context.setVariable(index, Integer.valueOf(i));
+//                    processElementContents(element, formatter, true);
+//                }
+//            }
             else
                 throw new TemplateException(element,
                         "<for> collection must be capable of iteration");
@@ -627,7 +647,7 @@ public class TemplateProcessor {
                 Element childElement = (Element)childNode;
                 if (XML.matchNS(childElement, paramElementName, namespace)) {
                     name = substAttr(childElement, nameAttrName);
-                    if (!isValidName(name))
+                    if (!Expression.isValidIdentifier(name))
                         throw new TemplateException(childElement, "Name missing or invalid");
                     String value = substAttr(childElement, valueAttrName);
                     if (isEmpty(value))
@@ -688,6 +708,9 @@ public class TemplateProcessor {
                     if (isEmpty(elementName))
                         throw new TemplateException(element, "<intercept> element missing");
                     String name = substAttr(childElement, nameAttrName);
+                    if (!isEmpty(name) && !Expression.isValidIdentifier(name))
+                        throw new TemplateException(childElement, nameAttrName,
+                                "Invalid name on <intercept>");
                     intercepts.add(new Intercept(elementName, childElement, name));
                 }
                 else
@@ -856,23 +879,6 @@ public class TemplateProcessor {
         return node.getNodeType() == Node.COMMENT_NODE ||
                 node.getNodeType() == Node.TEXT_NODE &&
                         XML.isAllWhiteSpace(((Text)node).getData());
-    }
-
-    public static boolean isValidName(String name) {
-        if (isEmpty(name) || !isValidNameStart(name.charAt(0)))
-            return false;
-        for (int i = 1; i < name.length(); i++)
-            if (!isValidNameContinuation(name.charAt(i)))
-                return false;
-        return true;
-    }
-
-    public static boolean isValidNameStart(char ch) {
-        return ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z' || ch == '_' || ch == '$';
-    }
-
-    public static boolean isValidNameContinuation(char ch) {
-        return isValidNameStart(ch) || ch >= '0' && ch <= '9';
     }
 
     public static String trimLeading(String str) {
@@ -1152,7 +1158,7 @@ public class TemplateProcessor {
          */
         public void addMacro(Element element) throws TemplateException {
             String name = element.getAttribute(nameAttrName);
-            if (!isValidName(name))
+            if (!Expression.isValidIdentifier(name))
                 throw new TemplateException(element, "Macro name missing or invalid");
             if (macros.containsKey(name))
                 throw new TemplateException(element, "Duplicate macro - " + name);
