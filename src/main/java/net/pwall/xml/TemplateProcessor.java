@@ -46,8 +46,8 @@ public class TemplateProcessor {
     //*1. Reconsider use of exceptions - make TemplateException a subclass of UserError?
     //*2. Implement <include>
     // 3. Consider <set> with contents - allocate element itself to a variable to allow access
-    //    to elements contained within it?
-    // 4. In Expression - allow JavaScript object syntax?
+    //    to elements contained within it? (Less important since 4 below completed)
+    //*4. In Expression - allow JavaScript object syntax?
     //    e.g. <xt:set name="array" value="['a','b','c']">
     // 5. Consider passing context object on each call - avoids potential error in unwinding
     // 6. Update namespace version number to 1.0 (or greater?)
@@ -56,6 +56,10 @@ public class TemplateProcessor {
     // 9. Is <macro> the best name for this functionality?
     //10. Add logging
     //*11. <for collection="xxx" index="aa"> (access index within collection)
+    //*12. xt:if attribute must be applied to inner elements (case, param, ...)
+    // 13. xt:element - create element with dynamic name
+    // 14. xt:expect (with default=) in macros - declare parameters expected
+    // 15. Manage namespaces on xml output
 
     public static final String defaultNamespace = "http://pwall.net/xml/xt/0.1";
 
@@ -256,6 +260,34 @@ public class TemplateProcessor {
 
     private void processElement(Element element, DefaultHandler2 formatter)
             throws TemplateException {
+        if (isIncluded(element)) {
+            if (XML.matchNS(element, errorElementName, namespace))
+                processError(element);
+            else if (XML.matchNS(element, doctypeElementName, namespace))
+                processDoctype(element, formatter);
+            else if (XML.matchNS(element, includeElementName, namespace))
+                processInclude(element, formatter);
+            else if (XML.matchNS(element, setElementName, namespace))
+                processSet(element, formatter);
+            else if (XML.matchNS(element, ifElementName, namespace))
+                processIf(element, formatter);
+            else if (XML.matchNS(element, switchElementName, namespace))
+                processSwitch(element, formatter);
+            else if (XML.matchNS(element, forElementName, namespace))
+                processFor(element, formatter);
+            else if (XML.matchNS(element, callElementName, namespace))
+                processCall(element, formatter);
+            else if (XML.matchNS(element, commentElementName, namespace))
+                processComment(element, formatter);
+            else if (XML.matchNS(element, copyElementName, namespace))
+                processCopy(element, formatter);
+            else
+                outputElement(element, formatter);
+        }
+    }
+
+    private boolean isIncluded(Element element) throws TemplateException {
+        // i.e. not excluded by xt:if=""
         Attr ifAttr = element.getAttributeNodeNS(namespace, ifAttrName);
         if (ifAttr != null) {
             String test = ifAttr.getValue();
@@ -263,35 +295,14 @@ public class TemplateProcessor {
                 String substTest = subst(test);
                 if (!isEmpty(substTest) &&
                         !parser.parseExpression(substTest, context).asBoolean())
-                    return;
+                    return false;;
             }
             catch (Expression.ExpressionException eee) {
                 throw new TemplateException(element, ifAttr.getName(),
                         "Error in \"if\" attribute - " + test + '\n' +eee.getMessage());
             }
         }
-        if (XML.matchNS(element, errorElementName, namespace))
-            processError(element);
-        else if (XML.matchNS(element, doctypeElementName, namespace))
-            processDoctype(element, formatter);
-        else if (XML.matchNS(element, includeElementName, namespace))
-            processInclude(element, formatter);
-        else if (XML.matchNS(element, setElementName, namespace))
-            processSet(element, formatter);
-        else if (XML.matchNS(element, ifElementName, namespace))
-            processIf(element, formatter);
-        else if (XML.matchNS(element, switchElementName, namespace))
-            processSwitch(element, formatter);
-        else if (XML.matchNS(element, forElementName, namespace))
-            processFor(element, formatter);
-        else if (XML.matchNS(element, callElementName, namespace))
-            processCall(element, formatter);
-        else if (XML.matchNS(element, commentElementName, namespace))
-            processComment(element, formatter);
-        else if (XML.matchNS(element, copyElementName, namespace))
-            processCopy(element, formatter);
-        else
-            outputElement(element, formatter);
+        return true;
     }
 
     private void processElementContents(Element element, DefaultHandler2 formatter,
@@ -429,27 +440,29 @@ public class TemplateProcessor {
             Node node = childNodes.item(i);
             if (node.getNodeType() == Node.ELEMENT_NODE) {
                 Element childElement = (Element) node;
-                if (XML.matchNS(childElement, caseElementName, namespace)) {
-                    String test = substAttr(childElement, testAttrName);
-                    boolean testResult = true;
-                    if (!isEmpty(test)) {
-                        try {
-                            testResult = parser.parseExpression(test, context).asBoolean();
+                if (isIncluded(childElement)) {
+                    if (XML.matchNS(childElement, caseElementName, namespace)) {
+                        String test = substAttr(childElement, testAttrName);
+                        boolean testResult = true;
+                        if (!isEmpty(test)) {
+                            try {
+                                testResult = parser.parseExpression(test, context).asBoolean();
+                            }
+                            catch (Expression.ExpressionException e) {
+                                throw new TemplateException(childElement, testAttrName,
+                                        "Error in test - " + test + '\n' + e.getMessage());
+                            }
                         }
-                        catch (Expression.ExpressionException e) {
-                            throw new TemplateException(childElement, testAttrName,
-                                    "Error in test - " + test + '\n' + e.getMessage());
+                        if (testResult) {
+                            processElementContentsNewContext(childElement, formatter, true);
+                            break;
+                            // note - doesn't check switch contents following successful case
                         }
                     }
-                    if (testResult) {
-                        processElementContentsNewContext(childElement, formatter, true);
-                        break;
-                        // note - doesn't check switch contents following successful case
-                    }
+                    else
+                        throw new TemplateException(childElement,
+                                "Illegal element within <switch>");
                 }
-                else
-                    throw new TemplateException(childElement,
-                            "Illegal element within <switch>");
             }
             else if (!isCommentOrEmpty(node))
                 throw new TemplateException(element, "Illegal content within <switch>");
@@ -645,24 +658,28 @@ public class TemplateProcessor {
             Node childNode = childNodes.item(i);
             if (childNode.getNodeType() == Node.ELEMENT_NODE) {
                 Element childElement = (Element)childNode;
-                if (XML.matchNS(childElement, paramElementName, namespace)) {
-                    name = substAttr(childElement, nameAttrName);
-                    if (!Expression.isValidIdentifier(name))
-                        throw new TemplateException(childElement, "Name missing or invalid");
-                    String value = substAttr(childElement, valueAttrName);
-                    if (isEmpty(value))
-                        throw new TemplateException(childElement, "Value missing");
-                    try {
-                        context.setVariable(name, // must be outer context
-                                parser.parseExpression(value, context).evaluate());
+                if (isIncluded(childElement)) {
+                    if (XML.matchNS(childElement, paramElementName, namespace)) {
+                        name = substAttr(childElement, nameAttrName);
+                        if (!Expression.isValidIdentifier(name))
+                            throw new TemplateException(childElement,
+                                    "Name missing or invalid");
+                        String value = substAttr(childElement, valueAttrName);
+                        if (isEmpty(value))
+                            throw new TemplateException(childElement, "Value missing");
+                        try {
+                            context.setVariable(name, // must be outer context
+                                    parser.parseExpression(value, context).evaluate());
+                        }
+                        catch (Expression.ExpressionException e) {
+                            throw new TemplateException(childElement, valueAttrName,
+                                    "Error in value - " + value + '\n' + e.getMessage());
+                        }
                     }
-                    catch (Expression.ExpressionException e) {
-                        throw new TemplateException(childElement, valueAttrName,
-                                "Error in value - " + value + '\n' + e.getMessage());
-                    }
+                    else
+                        throw new TemplateException(childElement,
+                                "Illegal element within <call>");
                 }
-                else
-                    throw new TemplateException(childElement, "Illegal element within <call>");
             }
             else if (!isCommentOrEmpty(childNode))
                 throw new TemplateException(element, "Illegal content within <call>");
@@ -702,20 +719,22 @@ public class TemplateProcessor {
             Node childNode = childNodes.item(i);
             if (childNode instanceof Element) {
                 Element childElement = (Element)childNode;
-                context = new TemplateContext(context, element);
-                if (XML.matchNS(childElement, interceptElementName, namespace)) {
-                    elementName = substAttr(childElement, elementAttrName);
-                    if (isEmpty(elementName))
-                        throw new TemplateException(element, "<intercept> element missing");
-                    String name = substAttr(childElement, nameAttrName);
-                    if (!isEmpty(name) && !Expression.isValidIdentifier(name))
-                        throw new TemplateException(childElement, nameAttrName,
-                                "Invalid name on <intercept>");
-                    intercepts.add(new Intercept(elementName, childElement, name));
+                if (isIncluded(childElement)) {
+                    context = new TemplateContext(context, element);
+                    if (XML.matchNS(childElement, interceptElementName, namespace)) {
+                        elementName = substAttr(childElement, elementAttrName);
+                        if (isEmpty(elementName))
+                            throw new TemplateException(element, "<intercept> element missing");
+                        String name = substAttr(childElement, nameAttrName);
+                        if (!isEmpty(name) && !Expression.isValidIdentifier(name))
+                            throw new TemplateException(childElement, nameAttrName,
+                                    "Invalid name on <intercept>");
+                        intercepts.add(new Intercept(elementName, childElement, name));
+                    }
+                    else
+                        throw new TemplateException(element, "Illegal element within <copy>");
+                    context = context.getParent();
                 }
-                else
-                    throw new TemplateException(element, "Illegal element within <copy>");
-                context = context.getParent();
             }
             else if (!isCommentOrEmpty(childNode))
                 throw new TemplateException(element, "Illegal content within <copy>");
