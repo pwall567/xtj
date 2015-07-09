@@ -57,9 +57,10 @@ public class TemplateProcessor {
     //10. Add logging
     //*11. <for collection="xxx" index="aa"> (access index within collection)
     //*12. xt:if attribute must be applied to inner elements (case, param, ...)
-    // 13. xt:element - create element with dynamic name
+    // 13. xt:element - create element with dynamic name (xt:attribute, xt:content/xt:data)
     // 14. xt:expect (with default=) in macros - declare parameters expected
     // 15. Manage namespaces on xml output
+    // 16. Change <for> name= to variable= ?
 
     public static final String defaultNamespace = "http://pwall.net/xml/xt/0.1";
 
