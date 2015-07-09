@@ -387,6 +387,7 @@ public class TemplateProcessor {
         catch (Exception e) {
             throw new TemplateException(element, "Error on include - " + href);
         }
+        // TODO check element is empty - or allow <param> elements for included code
         Element documentElement = included.getDocumentElement();
         context = new TemplateContext(context, documentElement);
         context.setURL(includeURL);
@@ -1038,9 +1039,9 @@ public class TemplateProcessor {
                 return null;
             StringBuilder sb = new StringBuilder();
             if (attrName != null)
-                sb.append("/@").append(attrName);
+                sb.append("/ @").append(attrName);
             else if (node instanceof Text) {
-                sb.append("/text()");
+                sb.append("/ text()");
                 Node parent = node.getParentNode();
                 if (parent != null) {
                     int count = 0;
@@ -1059,8 +1060,9 @@ public class TemplateProcessor {
                 node = node.getParentNode();
             }
             while (node != null && node instanceof Element) {
+                sb.insert(0, ' ');
                 sb.insert(0, getXPathElement((Element)node));
-                sb.insert(0, '/');
+                sb.insert(0, "/ ");
                 node = node.getParentNode();
             }
             return sb.toString();
