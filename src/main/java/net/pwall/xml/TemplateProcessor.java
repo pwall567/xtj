@@ -15,8 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import javax.xml.parsers.ParserConfigurationException;
-
 import net.pwall.el.Expression;
 import net.pwall.el.Functions;
 import net.pwall.el.SimpleVariable;
@@ -979,8 +977,7 @@ public class TemplateProcessor {
         }
     }
 
-    private static void run(OutputStream os, URL in, URL template)
-            throws ParserConfigurationException, SAXException, IOException, TemplateException {
+    private static void run(OutputStream os, URL in, URL template) throws TemplateException {
         Objects.requireNonNull(template);
         Document templateDOM = getDocument(template);
         TemplateProcessor processor = new TemplateProcessor(templateDOM, template);
@@ -988,18 +985,28 @@ public class TemplateProcessor {
                 Functions.class.getName());
         // should the above be variable? command-line args?
         if (in != null) {
-            Document inputDOM = XML.getDocumentBuilder().parse(in.openStream(), in.toString());
+            Document inputDOM = getDocument(in);
             processor.setVariable("page", new ElementWrapper(inputDOM.getDocumentElement()));
         }
         processor.process(os);
     }
 
-    private static synchronized Document getDocument(URL url)
-            throws SAXException, IOException, ParserConfigurationException {
+    private static synchronized Document getDocument(URL url) throws TemplateException {
         String urlString = url.toString();
         Document document = documentMap.get(urlString);
         if (document == null) {
-            document = XML.getDocumentBuilderNS().parse(url.openStream(), urlString);
+            try {
+                document = XML.getDocumentBuilderNS().parse(url.openStream(), urlString);
+            }
+            catch (IOException e) {
+                throw new TemplateException("I/O error reading URL - " + urlString);
+            }
+            catch (SAXException e) {
+                throw new TemplateException("Parsing error reading URL - " + urlString);
+            }
+            catch (Exception e) {
+                throw new TemplateException("Unexpected error reading URL - " + urlString);
+            }
             documentMap.put(urlString, document);
         }
         return document;
