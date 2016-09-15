@@ -6,7 +6,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>net.pwall.xml</groupId>
   <artifactId>xtj</artifactId>
-  <version>0.1</version>
+  <version>0.2</version>
   <name>XML Templating for Java</name>
   <description>XML Templating for Java</description>
   <packaging>jar</packaging>
@@ -33,6 +33,11 @@
     </developer>
   </developers>
 
+  <properties>
+    <java.version>1.7</java.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>net.pwall.xml</groupId>
@@ -50,6 +55,11 @@
       <version>3.0</version>
     </dependency>
     <dependency>
+      <groupId>net.pwall.util</groupId>
+      <artifactId>jsonutil</artifactId>
+      <version>1.2</version>
+    </dependency>
+    <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <version>4.11</version>
@@ -62,10 +72,36 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.3</version>
         <configuration>
-          <source>1.7</source>
-          <target>1.7</target>
+          <source>${java.version}</source>
+          <target>${java.version}</target>
         </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <version>2.5.5</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <main-class>net.pwall.xml.TemplateProcessor</main-class>
+            </manifest>
+          </archive>
+          <descriptors>
+            <descriptor>jar-with-dependencies.xml</descriptor>
+          </descriptors>
+          <outputDirectory>${project.build.directory}/dist/</outputDirectory>
+        </configuration>
+        <executions>
+          <execution>
+            <id>create-archive</id>
+            <phase>package</phase>
+            <goals>
+              <goal>single</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

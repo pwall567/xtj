@@ -14,11 +14,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 
 import net.pwall.el.Expression;
 import net.pwall.el.Functions;
 import net.pwall.el.SimpleVariable;
 import net.pwall.html.HTMLFormatter;
+import net.pwall.json.JSON;
 import net.pwall.util.UserError;
 
 import org.w3c.dom.Attr;
@@ -110,7 +112,6 @@ public class TemplateProcessor {
 
     private static Map<String, Document> documentMap = new HashMap<>();
 
-    private URL url;
     private Document dom;
     private Expression.Parser parser;
     private TemplateContext context;
@@ -118,24 +119,29 @@ public class TemplateProcessor {
     private String whitespace;
     private boolean prefixXML;
 
-    public TemplateProcessor(Document dom, URL url) {
-        this.dom = Objects.requireNonNull(dom);
-        this.url = url;
+    public TemplateProcessor() {
+        dom = null;
         parser = new Expression.Parser();
         parser.setConditionalAllowed(true);
-        context = new TemplateContext(null, dom.getDocumentElement());
-        context.setURL(url);
+        context = null;
         namespace = defaultNamespace;
         whitespace = null;
         prefixXML = false;
     }
 
-    public URL getUrl() {
-        return url;
+    public TemplateProcessor(Document dom, URL url) {
+        this();
+        setTemplate(dom, url);
     }
 
-    public void setUrl(URL url) {
-        this.url = url;
+    public void setTemplate(Document dom, URL url) {
+        this.dom = Objects.requireNonNull(dom);
+        context = new TemplateContext(null, dom.getDocumentElement());
+        context.setURL(url);
+    }
+
+    public URL getUrl() {
+        return context == null ? null : context.getURL();
     }
 
     public String getNamespace() {
@@ -176,11 +182,13 @@ public class TemplateProcessor {
         context.setVariable(identifier, object);
     }
 
-    public void addNamespace(String uri, String namespace) {
-        context.addNamespace(uri, namespace);
+    public void addNamespace(String uri, Object impl) {
+        context.addNamespace(uri, impl);
     }
 
     public void process(OutputStream os) throws TemplateException {
+        if (context == null)
+            throw new IllegalStateException("No template specified");
         Element documentElement = dom.getDocumentElement();
         if (XML.matchNS(documentElement, templateElementName, namespace)) {
             String whitespaceOption = substAttr(documentElement, whitespaceAttrName);
@@ -208,6 +216,8 @@ public class TemplateProcessor {
     }
 
     public void processXML(OutputStream os) throws TemplateException {
+        if (context == null)
+            throw new IllegalStateException("No template specified");
         try (XMLFormatter formatter = new XMLFormatter(os)) {
             if (whitespaceNone.equalsIgnoreCase(whitespace))
                 formatter.setWhitespace(XMLFormatter.Whitespace.NONE);
@@ -234,6 +244,8 @@ public class TemplateProcessor {
     }
 
     public void processHTML(OutputStream os) throws TemplateException {
+        if (context == null)
+            throw new IllegalStateException("No template specified");
         try (HTMLFormatter formatter = new HTMLFormatter(os)) {
             if (whitespaceNone.equalsIgnoreCase(whitespace))
                 formatter.setWhitespace(HTMLFormatter.Whitespace.NONE);
@@ -922,26 +934,64 @@ public class TemplateProcessor {
 
     public static void main(String[] args) {
         try {
+            TemplateProcessor processor = new TemplateProcessor();
             File currentDir = (new File(".")).getAbsoluteFile();
             URL baseURL = new URL("file://" + currentDir);
-            URL template = null;
-            URL in = null;
             File out = null;
             for (int i = 0; i < args.length; i++) {
                 String arg = args[i];
                 if (arg.equals("-template")) {
                     if (++i >= args.length || args[i].startsWith("-"))
                         throw new UserError("-template with no pathname");
-                    if (template != null)
+                    if (processor.getUrl() != null)
                         throw new UserError("Duplicate -template");
-                    template = new URL(baseURL, args[i]);
+                    URL template = new URL(baseURL, args[i]);
+                    processor.setTemplate(getDocument(template), template);
                 }
-                else if (arg.equals("-in")) {
-                    if (++i >= args.length || args[i].startsWith("-"))
-                        throw new UserError("-in with no pathname");
-                    if (in != null)
-                        throw new UserError("Duplicate -in");
-                    in = new URL(baseURL, args[i]);
+                else if (arg.equals("-xml")) {
+                    if (++i >= args.length)
+                        throw new UserError("-xml with no pathname");
+                    String argName = args[i];
+                    if (argName.startsWith("-"))
+                        throw new UserError("-xml with no pathname");
+                    if (++i >= args.length)
+                        throw new UserError("-xml with no URL");
+                    String argURL = args[i];
+                    if (argURL.startsWith("-"))
+                        throw new UserError("-xml with no URL");
+                    Document inputDOM = getDocument(new URL(baseURL, argURL));
+                    processor.setVariable(argName,
+                            new ElementWrapper(inputDOM.getDocumentElement()));
+                }
+                else if (arg.equals("-json")) {
+                    if (++i >= args.length)
+                        throw new UserError("-json with no pathname");
+                    String argName = args[i];
+                    if (argName.startsWith("-"))
+                        throw new UserError("-json with no pathname");
+                    if (++i >= args.length)
+                        throw new UserError("-json with no URL");
+                    String argURL = args[i];
+                    if (argURL.startsWith("-"))
+                        throw new UserError("-json with no URL");
+                    URL jsonURL = new URL(baseURL, argURL);
+                    processor.setVariable(argName, JSON.parse(jsonURL.openStream()));
+                }
+                else if (arg.equals("-prop")) {
+                    if (++i >= args.length)
+                        throw new UserError("-prop with no pathname");
+                    String argName = args[i];
+                    if (argName.startsWith("-"))
+                        throw new UserError("-prop with no pathname");
+                    if (++i >= args.length)
+                        throw new UserError("-prop with no URL");
+                    String argURL = args[i];
+                    if (argURL.startsWith("-"))
+                        throw new UserError("-prop with no URL");
+                    URL propURL = new URL(baseURL, argURL);
+                    Properties properties = new Properties();
+                    properties.load(propURL.openStream());
+                    processor.setVariable(argName, properties);
                 }
                 else if (arg.equals("-out")) {
                     if (++i >= args.length || args[i].startsWith("-"))
@@ -953,16 +1003,20 @@ public class TemplateProcessor {
                 else
                     throw new UserError("Unrecognised argument - " + arg);
             }
+            if (processor.getUrl() == null)
+                throw new UserError("No -template");
+            processor.addNamespace("http://java.sun.com/jsp/jstl/functions", new Functions());
+            // TODO make the above be a variable? command-line args?
             if (out != null) {
                 try (OutputStream os = new FileOutputStream(out)) {
-                    run(os, in, template);
+                    processor.process(os);
                 }
                 catch (IOException ioe) {
                     throw new RuntimeException("Error writing output file", ioe);
                 }
             }
             else
-                run(System.out, in, template);
+                processor.process(System.out);
         }
         catch (TemplateException te) {
             System.err.println();
@@ -975,20 +1029,6 @@ public class TemplateProcessor {
             e.printStackTrace();
             System.exit(1);
         }
-    }
-
-    private static void run(OutputStream os, URL in, URL template) throws TemplateException {
-        Objects.requireNonNull(template);
-        Document templateDOM = getDocument(template);
-        TemplateProcessor processor = new TemplateProcessor(templateDOM, template);
-        processor.addNamespace("http://java.sun.com/jsp/jstl/functions",
-                Functions.class.getName());
-        // should the above be variable? command-line args?
-        if (in != null) {
-            Document inputDOM = getDocument(in);
-            processor.setVariable("page", new ElementWrapper(inputDOM.getDocumentElement()));
-        }
-        processor.process(os);
     }
 
     private static synchronized Document getDocument(URL url) throws TemplateException {
@@ -1114,7 +1154,7 @@ public class TemplateProcessor {
         private Element element;
         private Map<String, Expression> map;
         private Map<String, Element> macros;
-        private Map<String, String> namespaces;
+        private Map<String, Object> namespaces;
         private URL url;
 
         /**
@@ -1209,8 +1249,8 @@ public class TemplateProcessor {
             return null;
         }
 
-        public void addNamespace(String uri, String namespace) {
-            namespaces.put(uri, namespace);
+        public void addNamespace(String uri, Object impl) {
+            namespaces.put(uri, impl);
         }
 
         @Override
@@ -1230,11 +1270,11 @@ public class TemplateProcessor {
         }
 
         @Override
-        public String resolveNamespace(String uri) {
+        public Object resolveNamespace(String uri) {
             for (TemplateContext context = this; context != null; context = context.parent) {
-                String classname = context.namespaces.get(uri);
-                if (classname != null)
-                    return classname;
+                Object impl = context.namespaces.get(uri);
+                if (impl != null)
+                    return impl;
             }
             return null;
         }
