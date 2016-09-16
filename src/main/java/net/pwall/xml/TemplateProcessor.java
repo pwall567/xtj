@@ -967,6 +967,9 @@ public class TemplateProcessor {
                     try {
                         inputDOM = getDocument(new URL(baseURL, argURL));
                     }
+                    catch (TemplateException e) {
+                        throw new UserError("-xml content invalid - " + args[i]);
+                    }
                     catch (Exception e) {
                         throw new UserError("-xml argument invalid - " + args[i]);
                     }
@@ -992,7 +995,7 @@ public class TemplateProcessor {
                         json = JSON.parse(jsonURL.openStream());
                     }
                     catch (JSONException e) {
-                        throw new UserError("-json bad format - " + args[i]);
+                        throw new UserError("-json content invalid - " + args[i]);
                     }
                     catch (Exception e) {
                         throw new UserError("-json argument invalid - " + args[i]);
