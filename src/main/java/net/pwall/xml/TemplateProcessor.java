@@ -21,6 +21,8 @@ import net.pwall.el.Functions;
 import net.pwall.el.SimpleVariable;
 import net.pwall.html.HTMLFormatter;
 import net.pwall.json.JSON;
+import net.pwall.json.JSONException;
+import net.pwall.json.JSONValue;
 import net.pwall.util.UserError;
 
 import org.w3c.dom.Attr;
@@ -950,32 +952,52 @@ public class TemplateProcessor {
                 }
                 else if (arg.equals("-xml")) {
                     if (++i >= args.length)
-                        throw new UserError("-xml with no pathname");
+                        throw new UserError("-xml with no argument name");
                     String argName = args[i];
                     if (argName.startsWith("-"))
-                        throw new UserError("-xml with no pathname");
+                        throw new UserError("-xml with no argument name");
+                    if (!Expression.isValidIdentifier(argName))
+                        throw new UserError("-xml argument name invalid - " + argName);
                     if (++i >= args.length)
                         throw new UserError("-xml with no URL");
                     String argURL = args[i];
                     if (argURL.startsWith("-"))
                         throw new UserError("-xml with no URL");
-                    Document inputDOM = getDocument(new URL(baseURL, argURL));
+                    Document inputDOM;
+                    try {
+                        inputDOM = getDocument(new URL(baseURL, argURL));
+                    }
+                    catch (Exception e) {
+                        throw new UserError("-xml argument invalid - " + args[i]);
+                    }
                     processor.setVariable(argName,
                             new ElementWrapper(inputDOM.getDocumentElement()));
                 }
                 else if (arg.equals("-json")) {
                     if (++i >= args.length)
-                        throw new UserError("-json with no pathname");
+                        throw new UserError("-json with no argument name");
                     String argName = args[i];
                     if (argName.startsWith("-"))
-                        throw new UserError("-json with no pathname");
+                        throw new UserError("-json with no argument name");
+                    if (!Expression.isValidIdentifier(argName))
+                        throw new UserError("-json argument name invalid - " + argName);
                     if (++i >= args.length)
                         throw new UserError("-json with no URL");
                     String argURL = args[i];
                     if (argURL.startsWith("-"))
                         throw new UserError("-json with no URL");
-                    URL jsonURL = new URL(baseURL, argURL);
-                    processor.setVariable(argName, JSON.parse(jsonURL.openStream()));
+                    JSONValue json;
+                    try {
+                        URL jsonURL = new URL(baseURL, argURL);
+                        json = JSON.parse(jsonURL.openStream());
+                    }
+                    catch (JSONException e) {
+                        throw new UserError("-json bad format - " + args[i]);
+                    }
+                    catch (Exception e) {
+                        throw new UserError("-json argument invalid - " + args[i]);
+                    }
+                    processor.setVariable(argName, json);
                 }
                 else if (arg.equals("-prop")) {
                     if (++i >= args.length)
