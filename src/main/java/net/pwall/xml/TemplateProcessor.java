@@ -996,6 +996,14 @@ public class TemplateProcessor {
                         throw new UserError("Duplicate -out");
                     out = new File(getArg(args, ++i, "-out with no pathname"));
                 }
+                else if (arg.startsWith("-D") && arg.length() > 2) {
+                    int j = arg.indexOf('=');
+                    String lhs = j < 0 ? arg.substring(2) : arg.substring(2, j);
+                    String rhs = j < 0 ? null : arg.substring(j + 1);
+                    if (!Expression.isValidIdentifier(lhs))
+                        throw new UserError("-D identifier invalid - " + lhs);
+                    processor.setVariable(lhs, rhs == null ? Boolean.TRUE : parseArg(rhs));
+                }
                 else
                     throw new UserError("Unrecognised argument - " + arg);
             }
@@ -1076,6 +1084,34 @@ public class TemplateProcessor {
         catch (IOException e) {
             throw new UserError("Error reading " + url);
         }
+    }
+
+    private static Object parseArg(String arg) {
+        if (arg.equalsIgnoreCase("null"))
+            return null;
+        if (arg.equalsIgnoreCase("true"))
+            return Boolean.TRUE;
+        if (arg.equalsIgnoreCase("false"))
+            return Boolean.FALSE;
+        try {
+            return Integer.decode(arg);
+        }
+        catch (NumberFormatException e) {
+            // ignore
+        }
+        try {
+            return Long.decode(arg);
+        }
+        catch (NumberFormatException e) {
+            // ignore
+        }
+        try {
+            return Double.valueOf(arg);
+        }
+        catch (NumberFormatException e) {
+            // ignore
+        }
+        return arg;
     }
 
     private static synchronized Document getDocument(URL url) throws TemplateException {
