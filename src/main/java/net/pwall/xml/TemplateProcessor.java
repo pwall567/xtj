@@ -7,8 +7,12 @@ package net.pwall.xml;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.Reader;
 import java.net.URL;
+import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -22,7 +26,7 @@ import net.pwall.el.SimpleVariable;
 import net.pwall.html.HTMLFormatter;
 import net.pwall.json.JSON;
 import net.pwall.json.JSONException;
-import net.pwall.json.JSONValue;
+import net.pwall.util.Strings;
 import net.pwall.util.UserError;
 
 import org.w3c.dom.Attr;
@@ -937,93 +941,60 @@ public class TemplateProcessor {
     public static void main(String[] args) {
         try {
             TemplateProcessor processor = new TemplateProcessor();
-            File currentDir = (new File(".")).getAbsoluteFile();
-            URL baseURL = new URL("file://" + currentDir);
+            File currentDir = new File(".");
+            URL baseURL = new URL("file://" + currentDir.getAbsoluteFile());
             File out = null;
             for (int i = 0; i < args.length; i++) {
                 String arg = args[i];
                 if (arg.equals("-template")) {
-                    if (++i >= args.length || args[i].startsWith("-"))
-                        throw new UserError("-template with no pathname");
                     if (processor.getUrl() != null)
                         throw new UserError("Duplicate -template");
-                    URL template = new URL(baseURL, args[i]);
+                    URL template = getArgURL(args, ++i, baseURL, "-template");
                     processor.setTemplate(getDocument(template), template);
                 }
                 else if (arg.equals("-xml")) {
-                    if (++i >= args.length)
-                        throw new UserError("-xml with no argument name");
-                    String argName = args[i];
-                    if (argName.startsWith("-"))
-                        throw new UserError("-xml with no argument name");
-                    if (!Expression.isValidIdentifier(argName))
-                        throw new UserError("-xml argument name invalid - " + argName);
-                    if (++i >= args.length)
-                        throw new UserError("-xml with no URL");
-                    String argURL = args[i];
-                    if (argURL.startsWith("-"))
-                        throw new UserError("-xml with no URL");
-                    Document inputDOM;
+                    String ident = getArgIdent(args, ++i, "-xml");
+                    URL xmlURL = getArgURL(args, ++i, baseURL, "-xml");
                     try {
-                        inputDOM = getDocument(new URL(baseURL, argURL));
+                        Element element = getDocument(xmlURL).getDocumentElement();
+                        processor.setVariable(ident, new ElementWrapper(element));
                     }
-                    catch (TemplateException e) {
+                    catch (TemplateException te) {
                         throw new UserError("-xml content invalid - " + args[i]);
                     }
                     catch (Exception e) {
-                        throw new UserError("-xml argument invalid - " + args[i]);
+                        throw new UserError("Error reading xml - " + args[i]);
                     }
-                    processor.setVariable(argName,
-                            new ElementWrapper(inputDOM.getDocumentElement()));
                 }
                 else if (arg.equals("-json")) {
-                    if (++i >= args.length)
-                        throw new UserError("-json with no argument name");
-                    String argName = args[i];
-                    if (argName.startsWith("-"))
-                        throw new UserError("-json with no argument name");
-                    if (!Expression.isValidIdentifier(argName))
-                        throw new UserError("-json argument name invalid - " + argName);
-                    if (++i >= args.length)
-                        throw new UserError("-json with no URL");
-                    String argURL = args[i];
-                    if (argURL.startsWith("-"))
-                        throw new UserError("-json with no URL");
-                    JSONValue json;
+                    String ident = getArgIdent(args, ++i, "-json");
+                    URL jsonURL = getArgURL(args, ++i, baseURL, "-json");
                     try {
-                        URL jsonURL = new URL(baseURL, argURL);
-                        json = JSON.parse(jsonURL.openStream());
+                        processor.setVariable(ident, JSON.parse(getURLReader(jsonURL)));
                     }
-                    catch (JSONException e) {
+                    catch (JSONException je) {
                         throw new UserError("-json content invalid - " + args[i]);
                     }
                     catch (Exception e) {
-                        throw new UserError("-json argument invalid - " + args[i]);
+                        throw new UserError("Error reading json - " + args[i]);
                     }
-                    processor.setVariable(argName, json);
                 }
                 else if (arg.equals("-prop")) {
-                    if (++i >= args.length)
-                        throw new UserError("-prop with no pathname");
-                    String argName = args[i];
-                    if (argName.startsWith("-"))
-                        throw new UserError("-prop with no pathname");
-                    if (++i >= args.length)
-                        throw new UserError("-prop with no URL");
-                    String argURL = args[i];
-                    if (argURL.startsWith("-"))
-                        throw new UserError("-prop with no URL");
-                    URL propURL = new URL(baseURL, argURL);
-                    Properties properties = new Properties();
-                    properties.load(propURL.openStream());
-                    processor.setVariable(argName, properties);
+                    String ident = getArgIdent(args, ++i, "-prop");
+                    URL propURL = getArgURL(args, ++i, baseURL, "-prop");
+                    try {
+                        Properties properties = new Properties();
+                        properties.load(getURLReader(propURL));
+                        processor.setVariable(ident, properties);
+                    }
+                    catch (Exception e) {
+                        throw new UserError("Error reading properties - " + args[i]);
+                    }
                 }
                 else if (arg.equals("-out")) {
-                    if (++i >= args.length || args[i].startsWith("-"))
-                        throw new UserError("-out with no pathname");
                     if (out != null)
                         throw new UserError("Duplicate -out");
-                    out = new File(args[i]);
+                    out = new File(getArg(args, ++i, "-out with no pathname"));
                 }
                 else
                     throw new UserError("Unrecognised argument - " + arg);
@@ -1056,12 +1027,63 @@ public class TemplateProcessor {
         }
     }
 
+    private static String getArg(String[] args, int index, String msg) {
+        if (index >= args.length)
+            throw new UserError(msg);
+        String result = args[index];
+        if (result.startsWith("-"))
+            throw new UserError(msg);
+        return result;
+    }
+
+    private static String getArgIdent(String[] args, int index, String name) {
+        String ident = getArg(args, index, name + " with no identifier");
+        if (!Expression.isValidIdentifier(ident))
+            throw new UserError(name + " identifier invalid - " + ident);
+        return ident;
+    }
+
+    private static URL getArgURL(String[] args, int index, URL baseURL, String name) {
+        String arg = getArg(args, index, name + " with no URL");
+        try {
+            return new URL(baseURL, arg);
+        }
+        catch (Exception e) {
+            throw new UserError(name + " URL invalid - " + arg);
+        }
+    }
+
+    private static Reader getURLReader(URL url) {
+        try {
+            URLConnection urlConnection = url.openConnection();
+            InputStream stream = urlConnection.getInputStream();
+            String contentTypeHeader = urlConnection.getContentType();
+            if (contentTypeHeader != null) {
+                String[] params = Strings.split(contentTypeHeader, ';');
+                for (int i = 1; i < params.length; i++) {
+                    String param = params[i];
+                    int j = param.indexOf('=');
+                    if (j > 0) {
+                        String lhs = param.substring(0, j).trim();
+                        String rhs = param.substring(j + 1).trim();
+                        if (lhs.equalsIgnoreCase("charset"))
+                            return new InputStreamReader(stream, rhs);
+                    }
+                }
+            }
+            return new InputStreamReader(stream);
+        }
+        catch (IOException e) {
+            throw new UserError("Error reading " + url);
+        }
+    }
+
     private static synchronized Document getDocument(URL url) throws TemplateException {
         String urlString = url.toString();
         Document document = documentMap.get(urlString);
         if (document == null) {
             try {
-                document = XML.getDocumentBuilderNS().parse(url.openStream(), urlString);
+                document = XML.getDocumentBuilderNS().parse(urlString);
             }
             catch (IOException e) {
                 throw new TemplateException("I/O error reading URL - " + urlString);
