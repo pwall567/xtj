@@ -69,6 +69,7 @@ public class TemplateProcessor {
     // 16. Change <for> name= to variable= ?
 
     public static final String defaultNamespace = "http://pwall.net/xml/xt/0.1";
+    public static final String jstlFunctionsURL = "http://java.sun.com/jsp/jstl/functions";
 
     private static final String templateElementName = "template";
     private static final String macroElementName = "macro";
@@ -116,6 +117,14 @@ public class TemplateProcessor {
     private static final String whitespaceIndent = "indent";
     private static final String optionInclude = "include";
 
+    private static final String nojstlSwitch = "-nojstl";
+    private static final String templateSwitch = "-template";
+    private static final String xmlSwitch = "-xml";
+    private static final String jsonSwitch = "-json";
+    private static final String propSwitch = "-prop";
+    private static final String outSwitch = "-out";
+    private static final String dSwitch = "-D";
+
     private static Map<String, Document> documentMap = new HashMap<>();
 
     private Document dom;
@@ -129,7 +138,7 @@ public class TemplateProcessor {
         dom = null;
         parser = new Expression.Parser();
         parser.setConditionalAllowed(true);
-        context = null;
+        context = new TemplateContext(null, null);
         namespace = defaultNamespace;
         whitespace = null;
         prefixXML = false;
@@ -140,14 +149,14 @@ public class TemplateProcessor {
         setTemplate(dom, url);
     }
 
-    public void setTemplate(Document dom, URL url) {
-        this.dom = Objects.requireNonNull(dom);
-        context = new TemplateContext(null, dom.getDocumentElement());
-        context.setURL(url);
+    public Document getDom() {
+        return dom;
     }
 
-    public URL getUrl() {
-        return context == null ? null : context.getURL();
+    public void setTemplate(Document dom, URL url) {
+        this.dom = Objects.requireNonNull(dom);
+        context = new TemplateContext(context, dom.getDocumentElement());
+        context.setURL(url);
     }
 
     public String getNamespace() {
@@ -944,44 +953,47 @@ public class TemplateProcessor {
             File currentDir = new File(".");
             URL baseURL = new URL("file://" + currentDir.getAbsoluteFile());
             File out = null;
+            boolean jstlFunctions = true;
             for (int i = 0; i < args.length; i++) {
                 String arg = args[i];
-                if (arg.equals("-template")) {
-                    if (processor.getUrl() != null)
-                        throw new UserError("Duplicate -template");
-                    URL template = getArgURL(args, ++i, baseURL, "-template");
+                if (arg.equals(nojstlSwitch))
+                    jstlFunctions = false;
+                else if (arg.equals(templateSwitch)) {
+                    if (processor.getDom() != null)
+                        throw new UserError("Duplicate " + templateSwitch);
+                    URL template = getArgURL(args, ++i, baseURL, templateSwitch);
                     processor.setTemplate(getDocument(template), template);
                 }
-                else if (arg.equals("-xml")) {
-                    String ident = getArgIdent(args, ++i, "-xml");
-                    URL xmlURL = getArgURL(args, ++i, baseURL, "-xml");
+                else if (arg.equals(xmlSwitch)) {
+                    String ident = getArgIdent(args, ++i, xmlSwitch);
+                    URL xmlURL = getArgURL(args, ++i, baseURL, xmlSwitch);
                     try {
                         Element element = getDocument(xmlURL).getDocumentElement();
                         processor.setVariable(ident, new ElementWrapper(element));
                     }
                     catch (TemplateException te) {
-                        throw new UserError("-xml content invalid - " + args[i]);
+                        throw new UserError(xmlSwitch + " content invalid - " + args[i]);
                     }
                     catch (Exception e) {
                         throw new UserError("Error reading xml - " + args[i]);
                     }
                 }
-                else if (arg.equals("-json")) {
-                    String ident = getArgIdent(args, ++i, "-json");
-                    URL jsonURL = getArgURL(args, ++i, baseURL, "-json");
+                else if (arg.equals(jsonSwitch)) {
+                    String ident = getArgIdent(args, ++i, jsonSwitch);
+                    URL jsonURL = getArgURL(args, ++i, baseURL, jsonSwitch);
                     try {
                         processor.setVariable(ident, JSON.parse(getURLReader(jsonURL)));
                     }
                     catch (JSONException je) {
-                        throw new UserError("-json content invalid - " + args[i]);
+                        throw new UserError(jsonSwitch + " content invalid - " + args[i]);
                     }
                     catch (Exception e) {
                         throw new UserError("Error reading json - " + args[i]);
                     }
                 }
-                else if (arg.equals("-prop")) {
-                    String ident = getArgIdent(args, ++i, "-prop");
-                    URL propURL = getArgURL(args, ++i, baseURL, "-prop");
+                else if (arg.equals(propSwitch)) {
+                    String ident = getArgIdent(args, ++i, propSwitch);
+                    URL propURL = getArgURL(args, ++i, baseURL, propSwitch);
                     try {
                         Properties properties = new Properties();
                         properties.load(getURLReader(propURL));
@@ -991,26 +1003,27 @@ public class TemplateProcessor {
                         throw new UserError("Error reading properties - " + args[i]);
                     }
                 }
-                else if (arg.equals("-out")) {
+                else if (arg.equals(outSwitch)) {
                     if (out != null)
-                        throw new UserError("Duplicate -out");
-                    out = new File(getArg(args, ++i, "-out with no pathname"));
+                        throw new UserError("Duplicate " + outSwitch);
+                    out = new File(getArg(args, ++i, outSwitch + " with no pathname"));
                 }
-                else if (arg.startsWith("-D") && arg.length() > 2) {
+                else if (arg.startsWith(dSwitch) && arg.length() > dSwitch.length()) {
                     int j = arg.indexOf('=');
-                    String lhs = j < 0 ? arg.substring(2) : arg.substring(2, j);
+                    String lhs = j < 0 ? arg.substring(dSwitch.length()) :
+                        arg.substring(dSwitch.length(), j);
                     String rhs = j < 0 ? null : arg.substring(j + 1);
                     if (!Expression.isValidIdentifier(lhs))
-                        throw new UserError("-D identifier invalid - " + lhs);
+                        throw new UserError(dSwitch + " identifier invalid - " + lhs);
                     processor.setVariable(lhs, rhs == null ? Boolean.TRUE : parseArg(rhs));
                 }
                 else
                     throw new UserError("Unrecognised argument - " + arg);
             }
-            if (processor.getUrl() == null)
-                throw new UserError("No -template");
-            processor.addNamespace("http://java.sun.com/jsp/jstl/functions", new Functions());
-            // TODO make the above be a variable? command-line args?
+            if (processor.getDom() == null)
+                throw new UserError("No " + templateSwitch);
+            if (jstlFunctions)
+                processor.addNamespace(jstlFunctionsURL, new Functions());
             if (out != null) {
                 try (OutputStream os = new FileOutputStream(out)) {
                     processor.process(os);
