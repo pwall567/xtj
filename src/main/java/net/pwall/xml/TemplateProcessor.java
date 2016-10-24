@@ -5,7 +5,9 @@
 package net.pwall.xml;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -1076,6 +1078,10 @@ public class TemplateProcessor {
 
     private static Reader getURLReader(URL url) {
         try {
+            String urlString = url.toString();
+            if (urlString.startsWith("file://")) { // workaround for Windows
+                return new FileReader(urlString.substring(7));
+            }
             URLConnection urlConnection = url.openConnection();
             InputStream stream = urlConnection.getInputStream();
             String contentTypeHeader = urlConnection.getContentType();
@@ -1132,7 +1138,12 @@ public class TemplateProcessor {
         Document document = documentMap.get(urlString);
         if (document == null) {
             try {
-                document = XML.getDocumentBuilderNS().parse(urlString);
+                if (urlString.startsWith("file://")) { // workaround for Windows
+                    InputStream is = new FileInputStream(urlString.substring(7));
+                    document = XML.getDocumentBuilderNS().parse(is);
+                }
+                else
+                    document = XML.getDocumentBuilderNS().parse(urlString);
             }
             catch (IOException e) {
                 throw new TemplateException("I/O error reading URL - " + urlString);
