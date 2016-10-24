@@ -1078,9 +1078,9 @@ public class TemplateProcessor {
 
     private static Reader getURLReader(URL url) {
         try {
-            String urlString = url.toString();
-            if (urlString.startsWith("file://")) { // workaround for Windows
-                return new FileReader(urlString.substring(7));
+            if ("file".equals(url.getProtocol())) {
+                // workaround for Windows
+                return new FileReader(url.getPath());
             }
             URLConnection urlConnection = url.openConnection();
             InputStream stream = urlConnection.getInputStream();
@@ -1138,8 +1138,9 @@ public class TemplateProcessor {
         Document document = documentMap.get(urlString);
         if (document == null) {
             try {
-                if (urlString.startsWith("file://")) { // workaround for Windows
-                    InputStream is = new FileInputStream(urlString.substring(7));
+                if ("file".equals(url.getProtocol())) {
+                    // workaround for Windows
+                    InputStream is = new FileInputStream(url.getPath());
                     document = XML.getDocumentBuilderNS().parse(is);
                 }
                 else
