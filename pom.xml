@@ -9,7 +9,13 @@
   <version>0.5</version>
   <name>xtj</name>
   <description>XML Templating for Java</description>
+  <url>https://github.com/pwall567/xtj</url>
   <packaging>jar</packaging>
+
+  <organization>
+    <name>Peter Wall</name>
+    <url>https://pwall.net</url>
+  </organization>
 
   <licenses>
     <license>
@@ -85,9 +91,8 @@
         <configuration>
           <archive>
             <manifest>
-              <mainClass>net.pwall.xml.TemplateProcessor</mainClass> 
-              <addDefaultImplementationEntries>true</addDefaultImplementationEntries> 
-              <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries> 
+              <mainClass>net.pwall.xml.TemplateProcessor</mainClass>
+              <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
             </manifest>
           </archive>
         </configuration>
@@ -99,9 +104,8 @@
         <configuration>
           <archive>
             <manifest>
-              <mainClass>net.pwall.xml.TemplateProcessor</mainClass> 
-              <addDefaultImplementationEntries>true</addDefaultImplementationEntries> 
-              <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries> 
+              <mainClass>net.pwall.xml.TemplateProcessor</mainClass>
+              <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
             </manifest>
           </archive>
           <descriptors>
