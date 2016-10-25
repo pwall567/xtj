@@ -39,6 +39,7 @@ import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.w3c.dom.Text;
+import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.ext.DefaultHandler2;
 import org.xml.sax.helpers.AttributesImpl;
@@ -119,6 +120,7 @@ public class TemplateProcessor {
     private static final String whitespaceIndent = "indent";
     private static final String optionInclude = "include";
 
+    private static final String versionSwitch = "-version";
     private static final String nojstlSwitch = "-nojstl";
     private static final String templateSwitch = "-template";
     private static final String xmlSwitch = "-xml";
@@ -126,6 +128,17 @@ public class TemplateProcessor {
     private static final String propSwitch = "-prop";
     private static final String outSwitch = "-out";
     private static final String dSwitch = "-D";
+
+    private static String applicationName;
+    private static String applicationHeading;
+    static {
+        Package pkg = TemplateProcessor.class.getPackage();
+        applicationName = pkg.getImplementationTitle();
+        if (applicationName != null)
+            applicationHeading = applicationName + " V" + pkg.getImplementationVersion();
+        else
+            applicationHeading = applicationName = "xtj";
+    }
 
     private static Map<String, Document> documentMap = new HashMap<>();
 
@@ -924,9 +937,9 @@ public class TemplateProcessor {
     }
 
     private static boolean isCommentOrEmpty(Node node) {
-        return node.getNodeType() == Node.COMMENT_NODE ||
-                node.getNodeType() == Node.TEXT_NODE &&
-                        XML.isAllWhiteSpace(((Text)node).getData());
+        short type = node.getNodeType();
+        return type == Node.COMMENT_NODE ||
+                type == Node.TEXT_NODE && XML.isAllWhiteSpace(((Text)node).getData());
     }
 
     public static String trimLeading(String str) {
@@ -958,7 +971,12 @@ public class TemplateProcessor {
             boolean jstlFunctions = true;
             for (int i = 0; i < args.length; i++) {
                 String arg = args[i];
-                if (arg.equals(nojstlSwitch))
+                if (arg.equals(versionSwitch)) {
+                    System.err.println(applicationHeading);
+                    if (args.length == 1)
+                        System.exit(0);
+                }
+                else if (arg.equals(nojstlSwitch))
                     jstlFunctions = false;
                 else if (arg.equals(templateSwitch)) {
                     if (processor.getDom() != null)
@@ -1078,10 +1096,8 @@ public class TemplateProcessor {
 
     private static Reader getURLReader(URL url) {
         try {
-            if ("file".equals(url.getProtocol())) {
-                // workaround for Windows
+            if ("file".equals(url.getProtocol())) // workaround for Windows
                 return new FileReader(url.getPath());
-            }
             URLConnection urlConnection = url.openConnection();
             InputStream stream = urlConnection.getInputStream();
             String contentTypeHeader = urlConnection.getContentType();
@@ -1138,13 +1154,12 @@ public class TemplateProcessor {
         Document document = documentMap.get(urlString);
         if (document == null) {
             try {
-                if ("file".equals(url.getProtocol())) {
-                    // workaround for Windows
-                    InputStream is = new FileInputStream(url.getPath());
-                    document = XML.getDocumentBuilderNS().parse(is);
-                }
+                InputSource is = new InputSource();
+                if ("file".equals(url.getProtocol())) // workaround for Windows
+                    is.setByteStream(new FileInputStream(url.getPath()));
                 else
-                    document = XML.getDocumentBuilderNS().parse(urlString);
+                    is.setSystemId(urlString);
+                document = XML.getDocumentBuilderNS().parse(is);
             }
             catch (IOException e) {
                 throw new TemplateException("I/O error reading URL - " + urlString);

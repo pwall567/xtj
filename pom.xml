@@ -7,7 +7,7 @@
   <groupId>net.pwall.xml</groupId>
   <artifactId>xtj</artifactId>
   <version>0.4</version>
-  <name>XML Templating for Java</name>
+  <name>xtj</name>
   <description>XML Templating for Java</description>
   <packaging>jar</packaging>
 
@@ -72,20 +72,36 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.3</version>
+        <version>3.5.1</version>
         <configuration>
           <source>${java.version}</source>
           <target>${java.version}</target>
         </configuration>
       </plugin>
       <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-assembly-plugin</artifactId>
-        <version>2.5.5</version>
+        <groupId>org.apache.maven.plugins</groupId> 
+        <artifactId>maven-jar-plugin</artifactId> 
+        <version>3.0.2</version> 
         <configuration>
           <archive>
             <manifest>
-              <main-class>net.pwall.xml.TemplateProcessor</main-class>
+              <mainClass>net.pwall.xml.TemplateProcessor</mainClass> 
+              <addDefaultImplementationEntries>true</addDefaultImplementationEntries> 
+              <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries> 
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <version>2.6</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>net.pwall.xml.TemplateProcessor</mainClass> 
+              <addDefaultImplementationEntries>true</addDefaultImplementationEntries> 
+              <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries> 
             </manifest>
           </archive>
           <descriptors>
