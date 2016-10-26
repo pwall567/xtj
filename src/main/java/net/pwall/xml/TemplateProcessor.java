@@ -71,6 +71,18 @@ public class TemplateProcessor {
     // 15. Manage namespaces on xml output
     // 16. Change <for> name= to variable= ?
 
+    public static final String applicationName;
+    public static final String applicationVersion;
+    public static final String applicationHeading;
+    static {
+        Package pkg = TemplateProcessor.class.getPackage();
+        String implementationTitle = pkg.getImplementationTitle();
+        applicationName = implementationTitle != null ? implementationTitle : "xtj";
+        applicationVersion = pkg.getImplementationVersion();
+        applicationHeading = applicationVersion != null ?
+                applicationName + " V" + applicationVersion : applicationName;
+    }
+
     public static final String defaultNamespace = "http://pwall.net/xml/xt/0.1";
     public static final String jstlFunctionsURL = "http://java.sun.com/jsp/jstl/functions";
 
@@ -128,17 +140,6 @@ public class TemplateProcessor {
     private static final String propSwitch = "-prop";
     private static final String outSwitch = "-out";
     private static final String dSwitch = "-D";
-
-    private static String applicationName;
-    private static String applicationHeading;
-    static {
-        Package pkg = TemplateProcessor.class.getPackage();
-        applicationName = pkg.getImplementationTitle();
-        if (applicationName != null)
-            applicationHeading = applicationName + " V" + pkg.getImplementationVersion();
-        else
-            applicationHeading = applicationName = "xtj";
-    }
 
     private static Map<String, Document> documentMap = new HashMap<>();
 
