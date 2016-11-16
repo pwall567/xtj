@@ -24,8 +24,14 @@ public class TestXTJ {
 
     @Before
     public void setUp() throws Exception {
-        try (InputStream is = getClass().getResourceAsStream("/testtemp.xml")) {
+        InputStream is = null;
+        try {
+            is = getClass().getResourceAsStream("/testtemp.xml");
             templateDOM = XML.getDocumentBuilderNS().parse(is);
+        }
+        finally {
+            if (is != null)
+                is.close();
         }
     }
 

@@ -70,6 +70,7 @@ public class TemplateProcessor {
     // 14. xt:expect (with default=) in macros - declare parameters expected
     // 15. Manage namespaces on xml output
     // 16. Change <for> name= to variable= ?
+    // 17. Add xt:set attribute (set a value, scoped to this element only)
 
     public static final String applicationName;
     public static final String applicationVersion;
@@ -141,7 +142,7 @@ public class TemplateProcessor {
     private static final String outSwitch = "-out";
     private static final String dSwitch = "-D";
 
-    private static Map<String, Document> documentMap = new HashMap<>();
+    private static Map<String, Document> documentMap = new HashMap<String, Document>();
 
     private Document dom;
     private Expression.Parser parser;
@@ -249,22 +250,30 @@ public class TemplateProcessor {
     public void processXML(OutputStream os) throws TemplateException {
         if (context == null)
             throw new IllegalStateException("No template specified");
-        try (XMLFormatter formatter = new XMLFormatter(os)) {
-            if (whitespaceNone.equalsIgnoreCase(whitespace))
-                formatter.setWhitespace(XMLFormatter.Whitespace.NONE);
-            else if (whitespaceAll.equalsIgnoreCase(whitespace))
-                formatter.setWhitespace(XMLFormatter.Whitespace.ALL);
-            else if (whitespaceIndent.equalsIgnoreCase(whitespace))
-                formatter.setWhitespace(XMLFormatter.Whitespace.INDENT);
-            if (prefixXML)
-                formatter.prefix();
-            formatter.startDocument();
-            Element documentElement = dom.getDocumentElement();
-            if (XML.matchNS(documentElement, templateElementName, namespace))
-                processElementContents(documentElement, formatter, false);
-            else
-                processElement(documentElement, formatter);
-            formatter.endDocument();
+        try {
+            XMLFormatter formatter = null;
+            try {
+                formatter = new XMLFormatter(os);
+                if (whitespaceNone.equalsIgnoreCase(whitespace))
+                    formatter.setWhitespace(XMLFormatter.Whitespace.NONE);
+                else if (whitespaceAll.equalsIgnoreCase(whitespace))
+                    formatter.setWhitespace(XMLFormatter.Whitespace.ALL);
+                else if (whitespaceIndent.equalsIgnoreCase(whitespace))
+                    formatter.setWhitespace(XMLFormatter.Whitespace.INDENT);
+                if (prefixXML)
+                    formatter.prefix();
+                formatter.startDocument();
+                Element documentElement = dom.getDocumentElement();
+                if (XML.matchNS(documentElement, templateElementName, namespace))
+                    processElementContents(documentElement, formatter, false);
+                else
+                    processElement(documentElement, formatter);
+                formatter.endDocument();
+            }
+            finally {
+                if (formatter != null)
+                    formatter.close();
+            }
         }
         catch (IOException ioe) {
             throw new RuntimeException("Unexpected I/O exception", ioe);
@@ -277,20 +286,28 @@ public class TemplateProcessor {
     public void processHTML(OutputStream os) throws TemplateException {
         if (context == null)
             throw new IllegalStateException("No template specified");
-        try (HTMLFormatter formatter = new HTMLFormatter(os)) {
-            if (whitespaceNone.equalsIgnoreCase(whitespace))
-                formatter.setWhitespace(HTMLFormatter.Whitespace.NONE);
-            else if (whitespaceAll.equalsIgnoreCase(whitespace))
-                formatter.setWhitespace(HTMLFormatter.Whitespace.ALL);
-            else if (whitespaceIndent.equalsIgnoreCase(whitespace))
-                formatter.setWhitespace(HTMLFormatter.Whitespace.INDENT);
-            formatter.startDocument();
-            Element documentElement = dom.getDocumentElement();
-            if (XML.matchNS(documentElement, templateElementName, namespace))
-                processElementContents(documentElement, formatter, false);
-            else
-                processElement(documentElement, formatter);
-            formatter.endDocument();
+        try {
+            HTMLFormatter formatter = null;
+            try {
+                formatter = new HTMLFormatter(os);
+                if (whitespaceNone.equalsIgnoreCase(whitespace))
+                    formatter.setWhitespace(HTMLFormatter.Whitespace.NONE);
+                else if (whitespaceAll.equalsIgnoreCase(whitespace))
+                    formatter.setWhitespace(HTMLFormatter.Whitespace.ALL);
+                else if (whitespaceIndent.equalsIgnoreCase(whitespace))
+                    formatter.setWhitespace(HTMLFormatter.Whitespace.INDENT);
+                formatter.startDocument();
+                Element documentElement = dom.getDocumentElement();
+                if (XML.matchNS(documentElement, templateElementName, namespace))
+                    processElementContents(documentElement, formatter, false);
+                else
+                    processElement(documentElement, formatter);
+                formatter.endDocument();
+            }
+            finally {
+                if (formatter != null)
+                    formatter.close();
+            }
         }
         catch (IOException ioe) {
             throw new RuntimeException("Unexpected I/O exception", ioe);
@@ -756,7 +773,7 @@ public class TemplateProcessor {
                 throw new TemplateException(element, optionAttrName,
                         "<copy> option not recognised - " + opt);
         }
-        List<Intercept> intercepts = new ArrayList<>();
+        List<Intercept> intercepts = new ArrayList<Intercept>();
         NodeList childNodes = element.getChildNodes();
         for (int i = 0, n = childNodes.getLength(); i < n; i++) {
             Node childNode = childNodes.item(i);
@@ -1046,8 +1063,16 @@ public class TemplateProcessor {
             if (jstlFunctions)
                 processor.addNamespace(jstlFunctionsURL, new Functions());
             if (out != null) {
-                try (OutputStream os = new FileOutputStream(out)) {
-                    processor.process(os);
+                try {
+                    OutputStream os = null;
+                    try {
+                        os = new FileOutputStream(out);
+                        processor.process(os);
+                    }
+                    finally {
+                        if (os != null)
+                            os.close();
+                    }
                 }
                 catch (IOException ioe) {
                     throw new RuntimeException("Error writing output file", ioe);
@@ -1289,9 +1314,9 @@ public class TemplateProcessor {
         public TemplateContext(TemplateContext parent, Element element) {
             this.parent = parent;
             this.element = element;
-            map = new HashMap<>();
-            macros = new HashMap<>();
-            namespaces = new HashMap<>();
+            map = new HashMap<String, Expression>();
+            macros = new HashMap<String, Element>();
+            namespaces = new HashMap<String, Object>();
             url = parent == null ? null : parent.getURL();
         }
 
@@ -1429,7 +1454,7 @@ public class TemplateProcessor {
 
         public List<ElementWrapper> getElems() {
             if (elems == null) {
-                elems = new ArrayList<>();
+                elems = new ArrayList<ElementWrapper>();
                 NodeList children = element.getChildNodes();
                 for (int i = 0, n = children.getLength(); i < n; i++) {
                     Node child = children.item(i);
@@ -1442,7 +1467,7 @@ public class TemplateProcessor {
 
         public Map<String, Object> getAttrs() {
             if (attrs == null) {
-                attrs = new HashMap<>();
+                attrs = new HashMap<String, Object>();
                 NamedNodeMap attributes = element.getAttributes();
                 for (int i = 0, n = attributes.getLength(); i < n; i++) {
                     Attr attr = (Attr)attributes.item(i);
