@@ -3,6 +3,10 @@ Added this change log after project was already under way.  Early changes are no
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## [0.6.1] - 2016-11-20
+### Changed
+- Fixed libraries for Java 6 compatibility
+
 ## [0.6] - 2016-11-17
 ### Changed
 - Modified to use Java 6
