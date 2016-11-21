@@ -6,7 +6,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>net.pwall.xml</groupId>
   <artifactId>xtj</artifactId>
-  <version>0.6.1</version>
+  <version>0.6.2</version>
   <name>xtj</name>
   <description>XML Templating for Java</description>
   <url>https://github.com/pwall567/xtj</url>

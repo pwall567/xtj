@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Properties;
 
 import net.pwall.el.Expression;
@@ -171,7 +170,7 @@ public class TemplateProcessor {
     }
 
     public void setTemplate(Document dom, URL url) {
-        this.dom = Objects.requireNonNull(dom);
+        this.dom = requireNonNull(dom);
         context = new TemplateContext(context, dom.getDocumentElement());
         context.setURL(url);
     }
@@ -1201,6 +1200,12 @@ public class TemplateProcessor {
         return document;
     }
 
+    private static <T> T requireNonNull(T obj) {
+        if (obj == null)
+            throw new NullPointerException();
+        return obj;
+    }
+
     public static class TemplateException extends UserError {
 
         private static final long serialVersionUID = 6540965713285875008L;
@@ -1404,7 +1409,7 @@ public class TemplateProcessor {
 
         @Override
         public String resolvePrefix(String prefix) {
-            String xmlnsAttrName = "xmlns:" + Objects.requireNonNull(prefix);
+            String xmlnsAttrName = "xmlns:" + requireNonNull(prefix);
             Element element = this.element;
             for (;;) {
                 String uri = element.getAttribute(xmlnsAttrName);
