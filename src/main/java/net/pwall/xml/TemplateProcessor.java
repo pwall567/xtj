@@ -1,5 +1,26 @@
 /*
  * @(#) TemplateProcessor.java
+ *
+ * xtj XML Templating for Java
+ * Copyright (c) 2015, 2016 Peter Wall
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 
 package net.pwall.xml;
@@ -79,8 +100,7 @@ public class TemplateProcessor {
         String implementationTitle = pkg.getImplementationTitle();
         applicationName = implementationTitle != null ? implementationTitle : "xtj";
         applicationVersion = pkg.getImplementationVersion();
-        applicationHeading = applicationVersion != null ?
-                applicationName + " V" + applicationVersion : applicationName;
+        applicationHeading = applicationVersion != null ? applicationName + " V" + applicationVersion : applicationName;
     }
 
     public static final String defaultNamespace = "http://pwall.net/xml/xt/0.1";
@@ -125,8 +145,8 @@ public class TemplateProcessor {
     private static final String hrefAttrName = "href";
     private static final String indexAttrName = "index";
 
-    private static final String prefixYes = "yes";
-    private static final String prefixNo = "no";
+    private static final String prefixTrue = "true";
+    private static final String prefixFalse = "false";
     private static final String whitespaceNone = "none";
     private static final String whitespaceAll = "all";
     private static final String whitespaceIndent = "indent";
@@ -204,9 +224,9 @@ public class TemplateProcessor {
     }
 
     public void setPrefixXML(String prefixXML) throws TemplateException {
-        if (!(prefixYes.equalsIgnoreCase(prefixXML) || prefixNo.equalsIgnoreCase(prefixXML)))
+        if (!(prefixTrue.equalsIgnoreCase(prefixXML) || prefixFalse.equalsIgnoreCase(prefixXML)))
             throw new TemplateException("Illegal prefix option - " + prefixXML);
-        setPrefixXML(prefixYes.equalsIgnoreCase(prefixXML));
+        setPrefixXML(prefixTrue.equalsIgnoreCase(prefixXML));
     }
 
     public void setVariable(String identifier, Object object) {
@@ -300,8 +320,7 @@ public class TemplateProcessor {
         }
     }
 
-    private void processElement(Element element, DefaultHandler2 formatter)
-            throws TemplateException {
+    private void processElement(Element element, DefaultHandler2 formatter) throws TemplateException {
         if (isIncluded(element)) {
             if (XML.matchNS(element, errorElementName, namespace))
                 processError(element);
@@ -335,8 +354,7 @@ public class TemplateProcessor {
             String test = ifAttr.getValue();
             try {
                 String substTest = subst(test);
-                if (!isEmpty(substTest) &&
-                        !parser.parseExpression(substTest, context).asBoolean())
+                if (!isEmpty(substTest) && !parser.parseExpression(substTest, context).asBoolean())
                     return false;;
             }
             catch (Expression.ExpressionException eee) {
@@ -347,8 +365,8 @@ public class TemplateProcessor {
         return true;
     }
 
-    private void processElementContents(Element element, DefaultHandler2 formatter,
-            boolean trim) throws TemplateException {
+    private void processElementContents(Element element, DefaultHandler2 formatter, boolean trim)
+            throws TemplateException {
         NodeList childNodes = element.getChildNodes();
         int start = 0;
         int end = childNodes.getLength();
@@ -384,8 +402,8 @@ public class TemplateProcessor {
         }
     }
 
-    private void processElementContentsNewContext(Element element, DefaultHandler2 formatter,
-            boolean trim) throws TemplateException {
+    private void processElementContentsNewContext(Element element, DefaultHandler2 formatter, boolean trim)
+            throws TemplateException {
         context = new TemplateContext(context, element);
         processElementContents(element, formatter, trim);
         context = context.getParent();
@@ -396,16 +414,14 @@ public class TemplateProcessor {
         throw new TemplateException(element, !isEmpty(text) ? text : "Error element");
     }
 
-    private void processDoctype(Element element, DefaultHandler2 formatter)
-            throws TemplateException {
+    private void processDoctype(Element element, DefaultHandler2 formatter) throws TemplateException {
         String name = substAttr(element, nameAttrName);
         if (isEmpty(name))
             throw new TemplateException(element, "Name missing");
         String systemAttr = substAttr(element, systemAttrName);
         String publicAttr = substAttr(element, publicAttrName);
         try {
-            formatter.startDTD(name, isEmpty(publicAttr) ? null : publicAttr,
-                    isEmpty(systemAttr) ? null : systemAttr);
+            formatter.startDTD(name, isEmpty(publicAttr) ? null : publicAttr, isEmpty(systemAttr) ? null : systemAttr);
             // TODO implement doctype internal subset? Otherwise check element empty?
             formatter.endDTD();
         }
@@ -414,8 +430,7 @@ public class TemplateProcessor {
         }
     }
 
-    private void processInclude(Element element, DefaultHandler2 formatter)
-            throws TemplateException {
+    private void processInclude(Element element, DefaultHandler2 formatter) throws TemplateException {
         String href = substAttr(element, hrefAttrName);
         if (isEmpty(href))
                 throw new TemplateException(element, "HRef missing");
@@ -443,8 +458,8 @@ public class TemplateProcessor {
         context = context.getParent();
     }
 
-    private void processSet(Element element,
-            @SuppressWarnings("unused") DefaultHandler2 formatter) throws TemplateException {
+    private void processSet(Element element, @SuppressWarnings("unused") DefaultHandler2 formatter)
+            throws TemplateException {
         String name = substAttr(element, nameAttrName);
         if (!Expression.isValidIdentifier(name))
             throw new TemplateException(element, "Name missing or invalid");
@@ -459,8 +474,7 @@ public class TemplateProcessor {
         // otherwise parse as JSON
     }
 
-    private void processIf(Element element, DefaultHandler2 formatter)
-            throws TemplateException {
+    private void processIf(Element element, DefaultHandler2 formatter) throws TemplateException {
         String test = substAttr(element, testAttrName);
         if (isEmpty(test))
             throw new TemplateException(element, "Test must be specified");
@@ -469,15 +483,13 @@ public class TemplateProcessor {
             testResult = parser.parseExpression(test, context).asBoolean();
         }
         catch (Expression.ExpressionException e) {
-            throw new TemplateException(element, testAttrName,
-                    "Error in test - " + test + '\n' + e.getMessage());
+            throw new TemplateException(element, testAttrName, "Error in test - " + test + '\n' + e.getMessage());
         }
         if (testResult)
             processElementContentsNewContext(element, formatter, true);
     }
 
-    private void processSwitch(Element element, DefaultHandler2 formatter)
-            throws TemplateException {
+    private void processSwitch(Element element, DefaultHandler2 formatter) throws TemplateException {
         NodeList childNodes = element.getChildNodes();
         for (int i = 0; i < childNodes.getLength(); i++) {
             Node node = childNodes.item(i);
@@ -503,8 +515,7 @@ public class TemplateProcessor {
                         }
                     }
                     else
-                        throw new TemplateException(childElement,
-                                "Illegal element within <switch>");
+                        throw new TemplateException(childElement, "Illegal element within <switch>");
                 }
             }
             else if (!isCommentOrEmpty(node))
@@ -527,20 +538,17 @@ public class TemplateProcessor {
             throw new TemplateException(element, indexAttrName, "Illegal index in <for>");
         if (!isEmpty(coll)) {
             if (!isEmpty(from) || !isEmpty(to) || !isEmpty(by))
-                throw new TemplateException(element,
-                        "<for> has illegal combination of attributes");
+                throw new TemplateException(element, "<for> has illegal combination of attributes");
             processForCollection(element, formatter, name, coll, index);
         }
         else if (!isEmpty(from) || !isEmpty(to) || !isEmpty(by)) {
             if (!isEmpty(index))
-                throw new TemplateException(element,
-                        "<for> has illegal combination of attributes");
+                throw new TemplateException(element, "<for> has illegal combination of attributes");
             Object fromObject = isEmpty(from) ? null : evaluate(from, element, fromAttrName);
             Object toObject = isEmpty(to) ? null : evaluate(to, element, toAttrName);
             Object byObject = isEmpty(by) ? null : evaluate(by, element, byAttrName);
             if (isFloating(fromObject) || isFloating(toObject) || isFloating(byObject))
-                processForSequenceFloat(element, formatter, name, fromObject, toObject,
-                        byObject);
+                processForSequenceFloat(element, formatter, name, fromObject, toObject, byObject);
             else
                 processForSequenceInt(element, formatter, name, fromObject, toObject, byObject);
         }
@@ -548,15 +556,12 @@ public class TemplateProcessor {
             throw new TemplateException(element, "<for> must specify iteration type");
     }
 
-    private void processForSequenceInt(Element element, DefaultHandler2 formatter, String name,
-            Object from, Object to, Object by) throws TemplateException {
+    private void processForSequenceInt(Element element, DefaultHandler2 formatter, String name, Object from, Object to,
+            Object by) throws TemplateException {
         // note - "to" value is exclusive; from="0" to="4" will perform 0,1,2,3
-        int fromValue = from == null ? 0 :
-                intValue(from, element, fromAttrName, "<for> from value invalid");
-        int toValue = to == null ? 0 :
-                intValue(to, element, toAttrName, "<for> to value invalid");
-        int byValue = by == null ? 1 :
-                intValue(by, element, byAttrName, "<for> by value invalid");
+        int fromValue = from == null ? 0 : intValue(from, element, fromAttrName, "<for> from value invalid");
+        int toValue = to == null ? 0 : intValue(to, element, toAttrName, "<for> to value invalid");
+        int byValue = by == null ? 1 : intValue(by, element, byAttrName, "<for> by value invalid");
         if (byValue <= 0)
             throw new TemplateException(element, byAttrName, "<for> by value invalid");
         if (fromValue != toValue) {
@@ -564,7 +569,7 @@ public class TemplateProcessor {
             if (fromValue < toValue) {
                 do {
                     if (!isEmpty(name))
-                        context.setVariable(name, new Integer(fromValue));
+                        context.setVariable(name, fromValue);
                     processElementContents(element, formatter, true);
                     fromValue += byValue;
                 } while (fromValue < toValue);
@@ -572,7 +577,7 @@ public class TemplateProcessor {
             else {
                 do {
                     if (!isEmpty(name))
-                        context.setVariable(name, new Integer(fromValue));
+                        context.setVariable(name, fromValue);
                     processElementContents(element, formatter, true);
                     fromValue -= byValue;
                 } while (fromValue > toValue);
@@ -581,8 +586,7 @@ public class TemplateProcessor {
         }
     }
 
-    private int intValue(Object obj, Element elem, String attrName, String msg)
-            throws TemplateException {
+    private int intValue(Object obj, Element elem, String attrName, String msg) throws TemplateException {
         try {
             return Expression.asInt(obj);
         }
@@ -591,15 +595,12 @@ public class TemplateProcessor {
         }
     }
 
-    private void processForSequenceFloat(Element element, DefaultHandler2 formatter,
-            String name, Object from, Object to, Object by) throws TemplateException {
+    private void processForSequenceFloat(Element element, DefaultHandler2 formatter, String name, Object from,
+            Object to, Object by) throws TemplateException {
         // note - "to" value is exclusive; from="0" to="4" will perform 0,1,2,3
-        double fromValue = from == null ? 0.0 :
-                doubleValue(from, element, fromAttrName, "<for> from value invalid");
-        double toValue = to == null ? 0.0 :
-                doubleValue(to, element, toAttrName, "<for> to value invalid");
-        double byValue = by == null ? 1.0 :
-                doubleValue(by, element, byAttrName, "<for> by value invalid");
+        double fromValue = from == null ? 0.0 : doubleValue(from, element, fromAttrName, "<for> from value invalid");
+        double toValue = to == null ? 0.0 : doubleValue(to, element, toAttrName, "<for> to value invalid");
+        double byValue = by == null ? 1.0 : doubleValue(by, element, byAttrName, "<for> by value invalid");
         if (byValue <= 0.0)
             throw new TemplateException(element, byAttrName, "<for> by value invalid");
         if (fromValue != toValue) {
@@ -607,7 +608,7 @@ public class TemplateProcessor {
             if (fromValue < toValue) {
                 do {
                     if (!isEmpty(name))
-                        context.setVariable(name, new Double(fromValue));
+                        context.setVariable(name, fromValue);
                     processElementContents(element, formatter, true);
                     fromValue += byValue;
                 } while (fromValue < toValue);
@@ -615,7 +616,7 @@ public class TemplateProcessor {
             else {
                 do {
                     if (!isEmpty(name))
-                        context.setVariable(name, new Double(fromValue));
+                        context.setVariable(name, fromValue);
                     processElementContents(element, formatter, true);
                     fromValue -= byValue;
                 } while (fromValue > toValue);
@@ -624,8 +625,7 @@ public class TemplateProcessor {
         }
     }
 
-    private double doubleValue(Object obj, Element elem, String attrName, String msg)
-            throws TemplateException {
+    private double doubleValue(Object obj, Element elem, String attrName, String msg) throws TemplateException {
         try {
             return Expression.asDouble(obj);
         }
@@ -634,8 +634,8 @@ public class TemplateProcessor {
         }
     }
 
-    private void processForCollection(Element element, DefaultHandler2 formatter, String name,
-            String coll, String index) throws TemplateException {
+    private void processForCollection(Element element, DefaultHandler2 formatter, String name, String coll,
+            String index) throws TemplateException {
         Object collObject = evaluate(coll, element, collectionAttrName);
         if (collObject != null) {
             context = new TemplateContext(context, element);
@@ -645,7 +645,7 @@ public class TemplateProcessor {
                     if (!isEmpty(name))
                         context.setVariable(name, obj);
                     if (!isEmpty(index))
-                        context.setVariable(index, Integer.valueOf(i));
+                        context.setVariable(index, i);
                     processElementContents(element, formatter, true);
                     i++;
                 }
@@ -656,7 +656,7 @@ public class TemplateProcessor {
                     if (!isEmpty(name))
                         context.setVariable(name, obj);
                     if (!isEmpty(index))
-                        context.setVariable(index, Integer.valueOf(i));
+                        context.setVariable(index, i);
                     processElementContents(element, formatter, true);
                     i++;
                 }
@@ -668,29 +668,17 @@ public class TemplateProcessor {
                     if (!isEmpty(name))
                         context.setVariable(name, obj);
                     if (!isEmpty(index))
-                        context.setVariable(index, Integer.valueOf(i));
+                        context.setVariable(index, i);
                     processElementContents(element, formatter, true);
                 }
             }
-//            else if (collObject.getClass().isArray()) { // unnecessary - above code does this
-//                for (int i = 0, n = Array.getLength(collObject); i < n; i++) {
-//                    Object obj = Array.get(collObject, i);
-//                    if (!isEmpty(name))
-//                        context.setVariable(name, obj);
-//                    if (!isEmpty(index))
-//                        context.setVariable(index, Integer.valueOf(i));
-//                    processElementContents(element, formatter, true);
-//                }
-//            }
             else
-                throw new TemplateException(element,
-                        "<for> collection must be capable of iteration");
+                throw new TemplateException(element, "<for> collection must be capable of iteration");
             context = context.getParent();
         }
     }
 
-    private void processCall(Element element, DefaultHandler2 formatter)
-            throws TemplateException {
+    private void processCall(Element element, DefaultHandler2 formatter) throws TemplateException {
         String name = substAttr(element, nameAttrName);
         Element macro = context.getMacro(name);
         if (macro == null)
@@ -705,8 +693,7 @@ public class TemplateProcessor {
                     if (XML.matchNS(childElement, paramElementName, namespace)) {
                         name = substAttr(childElement, nameAttrName);
                         if (!Expression.isValidIdentifier(name))
-                            throw new TemplateException(childElement,
-                                    "Name missing or invalid");
+                            throw new TemplateException(childElement, "Name missing or invalid");
                         String value = substAttr(childElement, valueAttrName);
                         if (isEmpty(value))
                             throw new TemplateException(childElement, "Value missing");
@@ -720,8 +707,7 @@ public class TemplateProcessor {
                         }
                     }
                     else
-                        throw new TemplateException(childElement,
-                                "Illegal element within <call>");
+                        throw new TemplateException(childElement, "Illegal element within <call>");
                 }
             }
             else if (!isCommentOrEmpty(childNode))
@@ -736,8 +722,7 @@ public class TemplateProcessor {
         // TODO complete this
     }
 
-    private void processCopy(Element element, DefaultHandler2 formatter)
-            throws TemplateException {
+    private void processCopy(Element element, DefaultHandler2 formatter) throws TemplateException {
         String elementName = substAttr(element, elementAttrName);
         if (isEmpty(elementName))
             throw new TemplateException(element, "<copy> element missing");
@@ -753,8 +738,7 @@ public class TemplateProcessor {
             if (optionInclude.equals(opt))
                 include = true;
             else
-                throw new TemplateException(element, optionAttrName,
-                        "<copy> option not recognised - " + opt);
+                throw new TemplateException(element, optionAttrName, "<copy> option not recognised - " + opt);
         }
         List<Intercept> intercepts = new ArrayList<>();
         NodeList childNodes = element.getChildNodes();
@@ -770,8 +754,7 @@ public class TemplateProcessor {
                             throw new TemplateException(element, "<intercept> element missing");
                         String name = substAttr(childElement, nameAttrName);
                         if (!isEmpty(name) && !Expression.isValidIdentifier(name))
-                            throw new TemplateException(childElement, nameAttrName,
-                                    "Invalid name on <intercept>");
+                            throw new TemplateException(childElement, nameAttrName, "Invalid name on <intercept>");
                         intercepts.add(new Intercept(elementName, childElement, name));
                     }
                     else
@@ -789,8 +772,8 @@ public class TemplateProcessor {
         context = context.getParent();
     }
 
-    private void copyElement(Element element, List<Intercept> intercepts,
-            DefaultHandler2 formatter) throws TemplateException {
+    private void copyElement(Element element, List<Intercept> intercepts, DefaultHandler2 formatter)
+            throws TemplateException {
         for (Intercept intercept : intercepts) {
             if (element.getTagName().equals(intercept.getTagName())) {
                 Element replacement = intercept.getReplacement();
@@ -807,31 +790,27 @@ public class TemplateProcessor {
         NamedNodeMap attributes = element.getAttributes();
         for (int i = 0, n = attributes.getLength(); i < n; i++) {
             Attr attr = (Attr)attributes.item(i);
-            attrs.addAttribute(attr.getNamespaceURI(), attr.getLocalName(), attr.getNodeName(),
-                    "CDATA", attr.getValue());
+            attrs.addAttribute(attr.getNamespaceURI(), attr.getLocalName(), attr.getNodeName(), "CDATA",
+                    attr.getValue());
         }
         try {
-            formatter.startElement(element.getNamespaceURI(), element.getLocalName(),
-                    element.getNodeName(), attrs);
+            formatter.startElement(element.getNamespaceURI(), element.getLocalName(), element.getNodeName(), attrs);
             copyElementContents(element, intercepts, formatter);
-            formatter.endElement(element.getNamespaceURI(), element.getLocalName(),
-                    element.getNodeName());
+            formatter.endElement(element.getNamespaceURI(), element.getLocalName(), element.getNodeName());
         }
         catch (SAXException saxe) {
             throw new RuntimeException("Unexpected SAX exception", saxe);
         }
     }
 
-    private void copyElementContents(Element element, List<Intercept> intercepts,
-            DefaultHandler2 formatter) throws TemplateException {
+    private void copyElementContents(Element element, List<Intercept> intercepts, DefaultHandler2 formatter)
+            throws TemplateException {
         context = new TemplateContext(context, element);
         NodeList childNodes = element.getChildNodes();
         for (int i = 0, n = childNodes.getLength(); i < n; i++) {
             Node childNode = childNodes.item(i);
             if (childNode instanceof Element)
                 copyElement((Element)childNode, intercepts, formatter);
-            else if (childNode instanceof Text)
-                outputData(((Text)childNode).getData(), formatter);
             else if (childNode instanceof CDATASection) {
                 try {
                     formatter.startCDATA();
@@ -842,12 +821,13 @@ public class TemplateProcessor {
                     throw new RuntimeException("Unexpected SAX exception", saxe);
                 }
             }
+            else if (childNode instanceof Text)
+                outputData(((Text)childNode).getData(), formatter);
         }
         context = context.getParent();
     }
 
-    private void outputElement(Element element, DefaultHandler2 formatter)
-            throws TemplateException {
+    private void outputElement(Element element, DefaultHandler2 formatter) throws TemplateException {
         AttributesImpl attrs = new AttributesImpl();
         NamedNodeMap attributes = element.getAttributes();
         for (int i = 0, n = attributes.getLength(); i < n; i++) {
@@ -857,36 +837,31 @@ public class TemplateProcessor {
                 try {
                     String substValue = subst(value);
                     if (!isEmpty(substValue))
-                        attrs.addAttribute(attr.getNamespaceURI(), attr.getLocalName(),
-                                attr.getNodeName(), "CDATA", substValue);
+                        attrs.addAttribute(attr.getNamespaceURI(), attr.getLocalName(), attr.getNodeName(), "CDATA",
+                                substValue);
                 }
                 catch (Expression.ExpressionException eee) {
-                    throw new TemplateException(element, attr.getName(),
-                            "Error in expression substitution - " + value);
+                    throw new TemplateException(element, attr.getName(), "Error in expression substitution - " + value);
                 }
             }
         }
         try {
-            formatter.startElement(element.getNamespaceURI(), element.getLocalName(),
-                    element.getNodeName(), attrs);
+            formatter.startElement(element.getNamespaceURI(), element.getLocalName(), element.getNodeName(), attrs);
             processElementContents(element, formatter, false);
-            formatter.endElement(element.getNamespaceURI(), element.getLocalName(),
-                    element.getNodeName());
+            formatter.endElement(element.getNamespaceURI(), element.getLocalName(), element.getNodeName());
         }
         catch (SAXException saxe) {
             throw new RuntimeException("Unexpected SAX exception", saxe);
         }
     }
 
-    private void outputText(Text text, String data, DefaultHandler2 formatter)
-            throws TemplateException {
+    private void outputText(Text text, String data, DefaultHandler2 formatter) throws TemplateException {
         try {
             String substData = subst(data);
             outputData(substData, formatter);
         }
         catch (Expression.ExpressionException eee) {
-            throw new TemplateException(text,
-                    "Error in expression substitution" + '\n' + eee.getMessage());
+            throw new TemplateException(text, "Error in expression substitution" + '\n' + eee.getMessage());
         }
     }
 
@@ -899,14 +874,12 @@ public class TemplateProcessor {
         }
     }
 
-    private Object evaluate(String str, Element element, String attrName)
-            throws TemplateException {
+    private Object evaluate(String str, Element element, String attrName) throws TemplateException {
         try {
             return parser.parseExpression(str, context).evaluate();
         }
         catch (Expression.ExpressionException eee) {
-            throw new TemplateException(element, attrName,
-                "Error in expression evaluation" + '\n' + eee.getMessage());
+            throw new TemplateException(element, attrName, "Error in expression evaluation" + '\n' + eee.getMessage());
         }
     }
 
@@ -939,11 +912,10 @@ public class TemplateProcessor {
 
     private static boolean isCommentOrEmpty(Node node) {
         short type = node.getNodeType();
-        return type == Node.COMMENT_NODE ||
-                type == Node.TEXT_NODE && XML.isAllWhiteSpace(((Text)node).getData());
+        return type == Node.COMMENT_NODE || type == Node.TEXT_NODE && XML.isAllWhiteSpace(((Text)node).getData());
     }
 
-    public static String trimLeading(String str) {
+    private static String trimLeading(String str) {
         int i = 0;
         int n = str.length();
         while (i < n && XML.isWhiteSpace(str.charAt(i)))
@@ -951,7 +923,7 @@ public class TemplateProcessor {
         return i > 0 ? str.substring(i) : str;
     }
 
-    public static String trimTrailing(String str) {
+    private static String trimTrailing(String str) {
         int i = 0;
         int n = str.length();
         while (i < n && XML.isWhiteSpace(str.charAt(n - 1)))
@@ -959,7 +931,7 @@ public class TemplateProcessor {
         return n < str.length() ? str.substring(0, n) : str;
     }
 
-    public static boolean isFloating(Object obj) {
+    private static boolean isFloating(Object obj) {
         return obj instanceof Double || obj instanceof Float;
     }
 
@@ -1256,8 +1228,7 @@ public class TemplateProcessor {
                         Node sibling = siblings.item(i);
                         if (sibling == element)
                             thisIndex = count;
-                        else if (sibling instanceof Element &&
-                                ((Element)sibling).getTagName().equals(tagName))
+                        else if (sibling instanceof Element && ((Element)sibling).getTagName().equals(tagName))
                             count++;
                     }
                     if (count > 0)
