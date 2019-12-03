@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
-<xt:template whitespace="indent" xmlns:xt="http://pwall.net/xml/xt/0.1"
+<xt:template whitespace="indent" xmlns:xt="http://pwall.net/xml/xt/1.0"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://pwall.net/xml/xt/0.1 http://pwall.net/xsd/xt-0.1.xsd">
+    xsi:schemaLocation="http://pwall.net/xml/xt/1.0 http://pwall.net/xsd/xt-1.0.xsd">
   <div>
     <xt:for name="a" from="1" to="5">
       <span id="test-${a}">a = ${a}; a*a = ${a * a}</span>

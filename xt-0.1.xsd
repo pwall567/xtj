@@ -1,0 +1,344 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xt="http://pwall.net/xml/xt/0.1"
+           targetNamespace="http://pwall.net/xml/xt/0.1" elementFormDefault="qualified">
+
+  <xs:annotation>
+    <xs:documentation xml:lang="en-AU">
+      This schema describes the xt (XML Templating) template language.
+    </xs:documentation>
+  </xs:annotation>
+
+  <xs:element name="template">
+    <xs:annotation>
+      <xs:documentation xml:lang="en-AU">
+        The template element introduces the template and allows the specification of output type
+        and options.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:complexContent>
+        <xs:extension base="xt:MixedContent">
+          <xs:attribute name="output" type="xt:OutputType"/>
+          <xs:attribute name="whitespace" type="xt:WhitespaceType"/>
+          <xs:attribute name="prefix" type="xt:TrueFalseType"/>
+        </xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="error">
+    <xs:annotation>
+      <xs:documentation xml:lang="en-AU">
+        Output an error message.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:complexContent>
+        <xs:restriction base="xs:anyType">
+          <xs:attribute name="text" type="xs:string" use="required"/>
+        </xs:restriction>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="doctype">
+    <xs:annotation>
+      <xs:documentation xml:lang="en-AU">
+        Output a doctype declaration.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:complexContent>
+        <xs:restriction base="xs:anyType">
+          <xs:attribute name="name" type="xs:Name" use="required"/>
+          <xs:attribute name="public" type="xs:token"/>
+          <xs:attribute name="system" type="xs:token"/>
+        </xs:restriction>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="include">
+    <xs:annotation>
+      <xs:documentation xml:lang="en-AU">
+        Include a section of template from another source.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:complexContent>
+        <xs:restriction base="xs:anyType">
+          <xs:attribute name="href" type="xs:anyURI" use="required"/>
+        </xs:restriction>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="set">
+    <xs:annotation>
+      <xs:documentation xml:lang="en-AU">
+        Set the value of a variable.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:complexContent>
+        <xs:restriction base="xs:anyType">
+          <xs:attribute name="name" type="xt:Name" use="required"/>
+          <xs:attribute name="value" type="xt:Expression"/>
+          <xs:attribute name="document" type="xt:Expression"/>
+        </xs:restriction>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="if">
+    <xs:annotation>
+      <xs:documentation xml:lang="en-AU">
+        Conditionally include the content within this element.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:complexContent>
+        <xs:extension base="xt:MixedContent">
+          <xs:attribute name="test" type="xt:Expression" use="required"/>
+        </xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="switch">
+    <xs:annotation>
+      <xs:documentation xml:lang="en-AU">
+        Conditionally include one of the enclosed cases.  Only the first case found to be true
+        will be included, and a case without a test is unconditional.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="case" maxOccurs="unbounded">
+          <xs:annotation>
+            <xs:documentation xml:lang="en-AU">
+              Specify a case of the switch.
+            </xs:documentation>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:complexContent>
+              <xs:extension base="xt:MixedContent">
+                <xs:attribute name="test" type="xt:Expression"/>
+              </xs:extension>
+            </xs:complexContent>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="for">
+    <xs:annotation>
+      <xs:documentation xml:lang="en-AU">
+        Iterate over the contents of a collection or a specified range of numbers, and include
+        the enclosed content repeatedly.  Either a collection or some combination of from/to/by
+        must be specified.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:complexContent>
+        <xs:extension base="xt:MixedContent">
+          <xs:attribute name="name" type="xt:Name"/>
+          <xs:attribute name="collection" type="xt:Expression"/>
+          <xs:attribute name="index" type="xt:Name"/>
+          <xs:attribute name="from" type="xt:Expression">
+            <xs:annotation>
+              <xs:documentation xml:lang="en-AU">
+                Starting value for iteration.
+              </xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+          <xs:attribute name="to" type="xt:Expression">
+            <xs:annotation>
+              <xs:documentation xml:lang="en-AU">
+                Ending value for iteration (exclusive - from="0" to="4" will perform 0,1,2,3).
+              </xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+          <xs:attribute name="by" type="xt:Expression">
+            <xs:annotation>
+              <xs:documentation xml:lang="en-AU">
+                Step value for iteration (must be positive - if end value is less than start the
+                step value will be subtracted, not added).
+              </xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+        </xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="call">
+    <xs:annotation>
+      <xs:documentation xml:lang="en-AU">
+        Call a named macro.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="param" minOccurs="0" maxOccurs="unbounded">
+          <xs:annotation>
+            <xs:documentation xml:lang="en-AU">
+              Specify a parameter.
+            </xs:documentation>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:complexContent>
+              <xs:restriction base="xs:anyType">
+                <xs:attribute name="name" type="xt:Name" use="required"/>
+                <xs:attribute name="value" type="xt:Expression" use="required"/>
+              </xs:restriction>
+            </xs:complexContent>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+      <xs:attribute name="name" type="xt:Name"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="comment" type="xs:string">
+    <xs:annotation>
+      <xs:documentation xml:lang="en-AU">
+        Output a comment.
+      </xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="copy">
+    <xs:annotation>
+      <xs:documentation xml:lang="en-AU">
+        Copy the specified element.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="intercept" minOccurs="0" maxOccurs="unbounded">
+          <xs:annotation>
+            <xs:documentation xml:lang="en-AU">
+              Specify an element to be intercepted during copying.
+            </xs:documentation>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:complexContent>
+              <xs:extension base="xt:MixedContent">
+                <xs:attribute name="element" type="xs:Name" use="required">
+                  <xs:annotation>
+                    <xs:documentation xml:lang="en-AU">
+                      The tagname of the element to be intercepted.
+                    </xs:documentation>
+                  </xs:annotation>
+                </xs:attribute>
+                <xs:attribute name="name" type="xt:Name">
+                  <xs:annotation>
+                    <xs:documentation xml:lang="en-AU">
+                      The name of a variable to be assigned an ElementWrapper for the
+                      intercepted element.
+                    </xs:documentation>
+                  </xs:annotation>
+                </xs:attribute>
+              </xs:extension>
+            </xs:complexContent>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+      <xs:attribute name="element" type="xt:Name" use="required">
+        <xs:annotation>
+          <xs:documentation xml:lang="en-AU">
+            An ElementWrapper for the element to be copied.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="option" type="xt:CopyOptionType"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="macro">
+    <xs:annotation>
+      <xs:documentation xml:lang="en-AU">
+        Define a macro.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:complexContent>
+        <xs:extension base="xt:MixedContent">
+          <xs:attribute name="name" type="xt:Name">
+            <xs:annotation>
+              <xs:documentation xml:lang="en-AU">
+                The macro name.
+              </xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+        </xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:attribute name="if" type="xt:Expression">
+    <xs:annotation>
+      <xs:documentation xml:lang="en-AU">
+        Allow a condition to be placed on any element.
+      </xs:documentation>
+    </xs:annotation>
+  </xs:attribute>
+
+  <xs:complexType name="MixedContent" mixed="true">
+    <xs:choice minOccurs="0" maxOccurs="unbounded">
+      <xs:any processContents="lax"/>
+    </xs:choice>
+  </xs:complexType>
+
+  <xs:simpleType name="Name">
+    <xs:annotation>
+      <xs:documentation xml:lang="en-AU">
+        Variable, macro name etc.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[A-Za-z_$][A-Za-z0-9_$]*"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="Expression">
+    <xs:annotation>
+      <xs:documentation xml:lang="en-AU">
+        An expression in JSP Expression Language (EL).
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="OutputType">
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="xml"/>
+      <xs:enumeration value="html"/>
+      <xs:enumeration value="text"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="WhitespaceType">
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="none"/>
+      <xs:enumeration value="all"/>
+      <xs:enumeration value="indent"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="TrueFalseType">
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="true"/>
+      <xs:enumeration value="false"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="CopyOptionType">
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="include"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+</xs:schema>
