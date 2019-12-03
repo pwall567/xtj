@@ -27,6 +27,7 @@ package net.pwall.xml;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
@@ -34,6 +35,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.Reader;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
@@ -45,7 +47,6 @@ import java.util.Properties;
 
 import net.pwall.el.Expression;
 import net.pwall.el.Functions;
-import net.pwall.el.SimpleVariable;
 import net.pwall.html.HTMLFormatter;
 import net.pwall.json.JSON;
 import net.pwall.json.JSONException;
@@ -103,7 +104,7 @@ public class TemplateProcessor {
         applicationHeading = applicationVersion != null ? applicationName + " V" + applicationVersion : applicationName;
     }
 
-    public static final String defaultNamespace = "http://pwall.net/xml/xt/0.1";
+    public static final String defaultNamespace = "http://pwall.net/xml/xt/1.0";
     public static final String jstlFunctionsURL = "http://java.sun.com/jsp/jstl/functions";
 
     private static final String templateElementName = "template";
@@ -140,13 +141,14 @@ public class TemplateProcessor {
     private static final String byAttrName = "by";
     private static final String elementAttrName = "element";
     private static final String optionAttrName = "option";
-    private static final String idAttrName = "id";
     private static final String ifAttrName = "if";
     private static final String hrefAttrName = "href";
     private static final String indexAttrName = "index";
 
     private static final String prefixTrue = "true";
     private static final String prefixFalse = "false";
+    private static final String prefixYes = "yes";
+    private static final String prefixNo = "no";
     private static final String whitespaceNone = "none";
     private static final String whitespaceAll = "all";
     private static final String whitespaceIndent = "indent";
@@ -183,6 +185,26 @@ public class TemplateProcessor {
     public TemplateProcessor(Document dom, URL url) {
         this();
         setTemplate(dom, url);
+    }
+
+    public TemplateProcessor(URL url) {
+        this(getDocument(url), url);
+    }
+
+    public static TemplateProcessor from(File file) throws FileNotFoundException {
+        if (!file.exists())
+            throw new FileNotFoundException(file.getAbsolutePath());
+        try {
+            return new TemplateProcessor(new URL("file://" + file.getAbsoluteFile()));
+        }
+        catch (MalformedURLException e) {
+            throw new RuntimeException("Unexpected MalformedURLException", e);
+        }
+    }
+
+    public static TemplateProcessor from(String filename) throws FileNotFoundException {
+        File file = new File(filename);
+        return from(file);
     }
 
     public Document getDom() {
@@ -224,13 +246,19 @@ public class TemplateProcessor {
     }
 
     public void setPrefixXML(String prefixXML) throws TemplateException {
-        if (!(prefixTrue.equalsIgnoreCase(prefixXML) || prefixFalse.equalsIgnoreCase(prefixXML)))
+        if (!(prefixTrue.equalsIgnoreCase(prefixXML) || prefixFalse.equalsIgnoreCase(prefixXML) ||
+                prefixYes.equalsIgnoreCase(prefixXML) || prefixNo.equalsIgnoreCase(prefixXML)))
             throw new TemplateException("Illegal prefix option - " + prefixXML);
-        setPrefixXML(prefixTrue.equalsIgnoreCase(prefixXML));
+        setPrefixXML(prefixTrue.equalsIgnoreCase(prefixXML) || prefixYes.equalsIgnoreCase(prefixXML));
     }
 
     public void setVariable(String identifier, Object object) {
         context.setVariable(identifier, object);
+    }
+
+    public <V> void setVariables(Map<String, V> map) {
+        for (Map.Entry<String, V> entry : map.entrySet())
+            context.setVariable(entry.getKey(), entry.getValue());
     }
 
     public void addNamespace(String uri, Object impl) {
@@ -248,9 +276,7 @@ public class TemplateProcessor {
             String outputAttr = substAttr(documentElement, outputAttrName);
             if (!isEmpty(outputAttr)) {
                 if (outputAttr.equalsIgnoreCase(outputXML)) {
-                    String prefixAttr = substAttr(documentElement, prefixAttrName);
-                    if (!isEmpty(prefixAttr))
-                        setPrefixXML(prefixAttr);
+                    applyPrefixAttr(documentElement, documentElement.getAttribute(prefixAttrName));
                     processXML(os);
                 }
                 else if (outputAttr.equalsIgnoreCase(outputHTML))
@@ -263,7 +289,49 @@ public class TemplateProcessor {
                 processXML(os);
         }
         else
+            processByOutputAttr(os, documentElement, documentElement.getAttributeNS(namespace, outputAttrName),
+                    documentElement.getAttributeNS(namespace, prefixAttrName));
+    }
+
+    private void processByOutputAttr(OutputStream os, Element documentElement, String outputAttrValue,
+            String prefixAttrValue) throws TemplateException {
+        if (outputAttrValue != null) {
+            try {
+                String substValue = subst(outputAttrValue);
+                if (!isEmpty(substValue)) {
+                    if (substValue.equalsIgnoreCase(outputXML)) {
+                        applyPrefixAttr(documentElement, prefixAttrValue);
+                        processXML(os);
+                    }
+                    else if (substValue.equalsIgnoreCase(outputHTML)) {
+                        processHTML(os);
+                    }
+                    else
+                        throw new TemplateException(documentElement, outputAttrName,
+                                "Illegal " + outputAttrName + ": " + substValue);
+                }
+            }
+            catch (Expression.ExpressionException eee) {
+                throw new TemplateException(documentElement, outputAttrName,
+                        "Error in expression substitution" + '\n' + eee.getMessage());
+            }
+        }
+        else
             processXML(os);
+    }
+
+    private void applyPrefixAttr(Element documentElement, String prefixAttrValue) {
+        if (prefixAttrValue != null) {
+            try {
+                String substValue = subst(prefixAttrValue);
+                if (!isEmpty(substValue))
+                    setPrefixXML(substValue);
+            }
+            catch (Expression.ExpressionException eee) {
+                throw new TemplateException(documentElement, prefixAttrName,
+                        "Error in expression substitution" + '\n' + eee.getMessage());
+            }
+        }
     }
 
     public void processXML(OutputStream os) throws TemplateException {
@@ -371,9 +439,9 @@ public class TemplateProcessor {
         int start = 0;
         int end = childNodes.getLength();
         if (trim) {
-            while (start < end && isCommentOrEmpty(childNodes.item(start)))
+            while (start < end && XML.isCommentOrEmpty(childNodes.item(start)))
                 start++;
-            while (start < end && isCommentOrEmpty(childNodes.item(end - 1)))
+            while (start < end && XML.isCommentOrEmpty(childNodes.item(end - 1)))
                 end--;
         }
         for (int i = start, n = end; i < n; i++) {
@@ -393,9 +461,9 @@ public class TemplateProcessor {
                 String data = text.getData();
                 if (trim) {
                     if (i == start)
-                        data = trimLeading(data);
+                        data = XML.trimLeading(data);
                     if (i == n - 1)
-                        data = trimTrailing(data);
+                        data = XML.trimTrailing(data);
                 }
                 outputText(text, data, formatter);
             }
@@ -468,7 +536,7 @@ public class TemplateProcessor {
         // TODO should be able to do this in Java
         String value = substAttr(element, valueAttrName);
         context.setVariable(name, evaluate(value, element, valueAttrName));
-        if (!isElementEmpty(element))
+        if (!XML.isElementEmpty(element))
             throw new TemplateException(element, "Illegal content");
         // TODO allow content - if it contains elements, store as an ElementWrapper;
         // otherwise parse as JSON
@@ -518,7 +586,7 @@ public class TemplateProcessor {
                         throw new TemplateException(childElement, "Illegal element within <switch>");
                 }
             }
-            else if (!isCommentOrEmpty(node))
+            else if (!XML.isCommentOrEmpty(node))
                 throw new TemplateException(element, "Illegal content within <switch>");
         }
     }
@@ -710,7 +778,7 @@ public class TemplateProcessor {
                         throw new TemplateException(childElement, "Illegal element within <call>");
                 }
             }
-            else if (!isCommentOrEmpty(childNode))
+            else if (!XML.isCommentOrEmpty(childNode))
                 throw new TemplateException(element, "Illegal content within <call>");
         }
         processElementContents(macro, formatter, true);
@@ -762,7 +830,7 @@ public class TemplateProcessor {
                     context = context.getParent();
                 }
             }
-            else if (!isCommentOrEmpty(childNode))
+            else if (!XML.isCommentOrEmpty(childNode))
                 throw new TemplateException(element, "Illegal content within <copy>");
         }
         if (include)
@@ -899,36 +967,6 @@ public class TemplateProcessor {
 
     private static boolean isEmpty(String str) {
         return str == null || str.length() == 0;
-    }
-
-    private static boolean isElementEmpty(Element element) {
-        NodeList childNodes = element.getChildNodes();
-        for (int i = 0; i < childNodes.getLength(); i++) {
-            if (!isCommentOrEmpty(childNodes.item(i)))
-                return false;
-        }
-        return true;
-    }
-
-    private static boolean isCommentOrEmpty(Node node) {
-        short type = node.getNodeType();
-        return type == Node.COMMENT_NODE || type == Node.TEXT_NODE && XML.isAllWhiteSpace(((Text)node).getData());
-    }
-
-    private static String trimLeading(String str) {
-        int i = 0;
-        int n = str.length();
-        while (i < n && XML.isWhiteSpace(str.charAt(i)))
-            i++;
-        return i > 0 ? str.substring(i) : str;
-    }
-
-    private static String trimTrailing(String str) {
-        int i = 0;
-        int n = str.length();
-        while (i < n && XML.isWhiteSpace(str.charAt(n - 1)))
-            n--;
-        return n < str.length() ? str.substring(0, n) : str;
     }
 
     private static boolean isFloating(Object obj) {
@@ -1146,234 +1184,6 @@ public class TemplateProcessor {
             documentMap.put(urlString, document);
         }
         return document;
-    }
-
-    public static class TemplateException extends UserError {
-
-        private static final long serialVersionUID = 6540965713285875008L;
-
-        private Node node;
-        private String attrName;
-
-        public TemplateException(Node node, String message) {
-            super(message);
-            this.node = node;
-        }
-
-        public TemplateException(Element element, String attrName, String message) {
-            super(message);
-            this.node = element;
-            this.attrName = attrName;
-        }
-
-        public TemplateException(String message) {
-            this(null, message);
-        }
-
-        public Node getNode() {
-            return node;
-        }
-
-        public String getAttrName() {
-            return attrName;
-        }
-
-        public String getXPath() {
-            if (node == null)
-                return null;
-            StringBuilder sb = new StringBuilder();
-            if (attrName != null)
-                sb.append("/ @").append(attrName);
-            else if (node instanceof Text) {
-                sb.append("/ text()");
-                Node parent = node.getParentNode();
-                if (parent != null) {
-                    int count = 0;
-                    int thisIndex = 0;
-                    NodeList siblings = parent.getChildNodes();
-                    for (int i = 0, n = siblings.getLength(); i < n; i++) {
-                        Node sibling = siblings.item(i);
-                        if (sibling == node)
-                            thisIndex = count;
-                        else if (sibling instanceof Text)
-                            count++;
-                    }
-                    if (count > 0)
-                        sb.append('[').append(thisIndex + 1).append(']');
-                }
-                node = node.getParentNode();
-            }
-            while (node != null && node instanceof Element) {
-                sb.insert(0, ' ');
-                sb.insert(0, getXPathElement((Element)node));
-                sb.insert(0, "/ ");
-                node = node.getParentNode();
-            }
-            return sb.toString();
-        }
-
-        private static String getXPathElement(Element element) {
-            StringBuilder sb = new StringBuilder(element.getTagName());
-            String id = element.getAttribute(idAttrName);
-            if (!isEmpty(id))
-                sb.append('#').append(id);
-            else {
-                Node parent = element.getParentNode();
-                if (parent != null) {
-                    String tagName = element.getTagName();
-                    int count = 0;
-                    int thisIndex = 0;
-                    NodeList siblings = parent.getChildNodes();
-                    for (int i = 0, n = siblings.getLength(); i < n; i++) {
-                        Node sibling = siblings.item(i);
-                        if (sibling == element)
-                            thisIndex = count;
-                        else if (sibling instanceof Element && ((Element)sibling).getTagName().equals(tagName))
-                            count++;
-                    }
-                    if (count > 0)
-                        sb.append('[').append(thisIndex + 1).append(']');
-                }
-            }
-            return sb.toString();
-        }
-
-    }
-
-    /**
-     * Template Context - includes Name Resolver for Expression Language.
-     */
-    public static class TemplateContext implements Expression.ExtendedResolver {
-
-        private TemplateContext parent;
-        private Element element;
-        private Map<String, Expression> map;
-        private Map<String, Element> macros;
-        private Map<String, Object> namespaces;
-        private URL url;
-
-        /**
-         * Construct the <code>TemplateResolver</code>
-         *
-         * @param   parent  the parent context
-         */
-        public TemplateContext(TemplateContext parent, Element element) {
-            this.parent = parent;
-            this.element = element;
-            map = new HashMap<>();
-            macros = new HashMap<>();
-            namespaces = new HashMap<>();
-            url = parent == null ? null : parent.getURL();
-        }
-
-        /**
-         * Get the parent context.
-         *
-         * @return  the parent context
-         */
-        public TemplateContext getParent() {
-            return parent;
-        }
-
-        public URL getURL() {
-            return url;
-        }
-
-        public void setURL(URL url) {
-            this.url = url;
-        }
-
-        /**
-         * Create a variable, or modify an existing one.
-         *
-         * @param identifier  the identifier of the variable
-         * @param object      the value of the variable
-         */
-        public void setVariable(String identifier, Object object) {
-            map.put(identifier, new SimpleVariable(identifier, object));
-        }
-
-        public void setConstant(String identifier, Object object) {
-            map.put(identifier, new Expression.Constant(object));
-        }
-
-        /**
-         * Resolve an identifier to an expression.
-         *
-         * @param identifier  the identifier to be resolved
-         * @return            a variable, or null if the name can not be resolved
-         * @see     Expression.Resolver#resolve(String)
-         */
-        @Override
-        public Expression resolve(String identifier) {
-            for (TemplateContext context = this; context != null; context = context.parent) {
-                Expression e = context.map.get(identifier);
-                if (e != null)
-                    return e;
-            }
-            return null;
-        }
-
-        /**
-         * Add a macro to the current context.
-         *
-         * @param   element the macro element
-         * @throws  TemplateException if the macro does not have a valid name, or is a duplicate
-         */
-        public void addMacro(Element element) throws TemplateException {
-            String name = element.getAttribute(nameAttrName);
-            if (!Expression.isValidIdentifier(name))
-                throw new TemplateException(element, "Macro name missing or invalid");
-            if (macros.containsKey(name))
-                throw new TemplateException(element, "Duplicate macro - " + name);
-            macros.put(name, element);
-        }
-
-        /**
-         * Get a macro.
-         *
-         * @param   name    the macro name
-         * @return  the macro element
-         */
-        public Element getMacro(String name) {
-            for (TemplateContext context = this; context != null; context = context.parent) {
-                Element macro = context.macros.get(name);
-                if (macro != null)
-                    return macro;
-            }
-            return null;
-        }
-
-        public void addNamespace(String uri, Object impl) {
-            namespaces.put(uri, impl);
-        }
-
-        @Override
-        public String resolvePrefix(String prefix) {
-            String xmlnsAttrName = "xmlns:" + Objects.requireNonNull(prefix);
-            Element element = this.element;
-            for (;;) {
-                String uri = element.getAttribute(xmlnsAttrName);
-                if (!isEmpty(uri))
-                    return uri;
-                Node parent = element.getParentNode();
-                if (!(parent instanceof Element))
-                    break;
-                element = (Element)parent;
-            }
-            return null;
-        }
-
-        @Override
-        public Object resolveNamespace(String uri) {
-            for (TemplateContext context = this; context != null; context = context.parent) {
-                Object impl = context.namespaces.get(uri);
-                if (impl != null)
-                    return impl;
-            }
-            return null;
-        }
-
     }
 
     public static class ElementWrapper {

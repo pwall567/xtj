@@ -4,6 +4,14 @@ Added this change log after project was already under way.  Early changes are no
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
 ## [0.7] - 2019-10-23
+### Added
+- `TemplateContext` and `TemplateException` split out from `TemplateProcessor`
+### Changed
+- Added new factory methods to `TemplateProcessor`
+- Improved handling of options when no `template` element used
+- Switched to later version of `htmlutil`
+
+## [0.7] - 2019-10-23
 ### Changed
 - Minor fixes and added Maven deployment tasks
 
