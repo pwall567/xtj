@@ -2,7 +2,7 @@
  * @(#) TemplateProcessor.java
  *
  * xtj XML Templating for Java
- * Copyright (c) 2015, 2016 Peter Wall
+ * Copyright (c) 2015, 2016, 2020 Peter Wall
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -45,8 +45,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 
+import net.pwall.el.DoubleCoercionException;
 import net.pwall.el.Expression;
+import net.pwall.el.ExpressionException;
 import net.pwall.el.Functions;
+import net.pwall.el.IntCoercionException;
+import net.pwall.el.Parser;
 import net.pwall.html.HTMLFormatter;
 import net.pwall.json.JSON;
 import net.pwall.json.JSONException;
@@ -61,9 +65,11 @@ import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.w3c.dom.Text;
+import org.xml.sax.Attributes;
 import org.xml.sax.InputSource;
+import org.xml.sax.Locator;
 import org.xml.sax.SAXException;
-import org.xml.sax.ext.DefaultHandler2;
+import org.xml.sax.ext.LexicalHandler;
 import org.xml.sax.helpers.AttributesImpl;
 
 /**
@@ -163,10 +169,10 @@ public class TemplateProcessor {
     private static final String outSwitch = "-out";
     private static final String dSwitch = "-D";
 
-    private static Map<String, Document> documentMap = new HashMap<>();
+    private static final Map<String, Document> documentMap = new HashMap<>();
 
     private Document dom;
-    private Expression.Parser parser;
+    private final Parser parser;
     private TemplateContext context;
     private String namespace;
     private String whitespace;
@@ -174,8 +180,7 @@ public class TemplateProcessor {
 
     public TemplateProcessor() {
         dom = null;
-        parser = new Expression.Parser();
-        parser.setConditionalAllowed(true);
+        parser = Expression.getDefaultParser();
         context = new TemplateContext(null, null);
         namespace = defaultNamespace;
         whitespace = null;
@@ -311,7 +316,7 @@ public class TemplateProcessor {
                                 "Illegal " + outputAttrName + ": " + substValue);
                 }
             }
-            catch (Expression.ExpressionException eee) {
+            catch (ExpressionException eee) {
                 throw new TemplateException(documentElement, outputAttrName,
                         "Error in expression substitution" + '\n' + eee.getMessage());
             }
@@ -327,17 +332,40 @@ public class TemplateProcessor {
                 if (!isEmpty(substValue))
                     setPrefixXML(substValue);
             }
-            catch (Expression.ExpressionException eee) {
+            catch (ExpressionException eee) {
                 throw new TemplateException(documentElement, prefixAttrName,
                         "Error in expression substitution" + '\n' + eee.getMessage());
             }
         }
     }
 
+    public void processToSAX(SAXInterface saxHandler) {
+        if (context == null)
+            throw new IllegalStateException("No template specified");
+        try {
+            saxHandler.startDocument();
+            Element documentElement = dom.getDocumentElement();
+            if (XML.matchNS(documentElement, templateElementName, namespace))
+                processElementContents(documentElement, saxHandler, false);
+            else
+                processElement(documentElement, saxHandler);
+            saxHandler.endDocument();
+        }
+        catch (SAXException saxe) {
+            throw new RuntimeException("Unexpected SAX exception", saxe);
+        }
+    }
+
+    public Document processToDOM() {
+        SAX2DOMForXtj sax2dom = new SAX2DOMForXtj();
+        processToSAX(sax2dom);
+        return sax2dom.getDocument();
+    }
+
     public void processXML(OutputStream os) throws TemplateException {
         if (context == null)
             throw new IllegalStateException("No template specified");
-        try (XMLFormatter formatter = new XMLFormatter(os)) {
+        try (XMLFormatterForXTJ formatter = new XMLFormatterForXTJ(os)) {
             if (whitespaceNone.equalsIgnoreCase(whitespace))
                 formatter.setWhitespace(XMLFormatter.Whitespace.NONE);
             else if (whitespaceAll.equalsIgnoreCase(whitespace))
@@ -346,13 +374,7 @@ public class TemplateProcessor {
                 formatter.setWhitespace(XMLFormatter.Whitespace.INDENT);
             if (prefixXML)
                 formatter.prefix();
-            formatter.startDocument();
-            Element documentElement = dom.getDocumentElement();
-            if (XML.matchNS(documentElement, templateElementName, namespace))
-                processElementContents(documentElement, formatter, false);
-            else
-                processElement(documentElement, formatter);
-            formatter.endDocument();
+            processToSAX(formatter);
         }
         catch (IOException ioe) {
             throw new RuntimeException("Unexpected I/O exception", ioe);
@@ -365,30 +387,21 @@ public class TemplateProcessor {
     public void processHTML(OutputStream os) throws TemplateException {
         if (context == null)
             throw new IllegalStateException("No template specified");
-        try (HTMLFormatter formatter = new HTMLFormatter(os)) {
+        try (HTMLFormatterForXTJ formatter = new HTMLFormatterForXTJ(os)) {
             if (whitespaceNone.equalsIgnoreCase(whitespace))
                 formatter.setWhitespace(HTMLFormatter.Whitespace.NONE);
             else if (whitespaceAll.equalsIgnoreCase(whitespace))
                 formatter.setWhitespace(HTMLFormatter.Whitespace.ALL);
             else if (whitespaceIndent.equalsIgnoreCase(whitespace))
                 formatter.setWhitespace(HTMLFormatter.Whitespace.INDENT);
-            formatter.startDocument();
-            Element documentElement = dom.getDocumentElement();
-            if (XML.matchNS(documentElement, templateElementName, namespace))
-                processElementContents(documentElement, formatter, false);
-            else
-                processElement(documentElement, formatter);
-            formatter.endDocument();
+            processToSAX(formatter);
         }
         catch (IOException ioe) {
             throw new RuntimeException("Unexpected I/O exception", ioe);
         }
-        catch (SAXException saxe) {
-            throw new RuntimeException("Unexpected SAX exception", saxe);
-        }
     }
 
-    private void processElement(Element element, DefaultHandler2 formatter) throws TemplateException {
+    private void processElement(Element element, SAXInterface formatter) throws TemplateException {
         if (isIncluded(element)) {
             if (XML.matchNS(element, errorElementName, namespace))
                 processError(element);
@@ -423,9 +436,9 @@ public class TemplateProcessor {
             try {
                 String substTest = subst(test);
                 if (!isEmpty(substTest) && !parser.parseExpression(substTest, context).asBoolean())
-                    return false;;
+                    return false;
             }
-            catch (Expression.ExpressionException eee) {
+            catch (ExpressionException eee) {
                 throw new TemplateException(element, ifAttr.getName(),
                         "Error in \"if\" attribute - " + test + '\n' +eee.getMessage());
             }
@@ -433,7 +446,7 @@ public class TemplateProcessor {
         return true;
     }
 
-    private void processElementContents(Element element, DefaultHandler2 formatter, boolean trim)
+    private void processElementContents(Element element, SAXInterface formatter, boolean trim)
             throws TemplateException {
         NodeList childNodes = element.getChildNodes();
         int start = 0;
@@ -470,7 +483,7 @@ public class TemplateProcessor {
         }
     }
 
-    private void processElementContentsNewContext(Element element, DefaultHandler2 formatter, boolean trim)
+    private void processElementContentsNewContext(Element element, SAXInterface formatter, boolean trim)
             throws TemplateException {
         context = new TemplateContext(context, element);
         processElementContents(element, formatter, trim);
@@ -482,7 +495,7 @@ public class TemplateProcessor {
         throw new TemplateException(element, !isEmpty(text) ? text : "Error element");
     }
 
-    private void processDoctype(Element element, DefaultHandler2 formatter) throws TemplateException {
+    private void processDoctype(Element element, LexicalHandler formatter) throws TemplateException {
         String name = substAttr(element, nameAttrName);
         if (isEmpty(name))
             throw new TemplateException(element, "Name missing");
@@ -498,13 +511,13 @@ public class TemplateProcessor {
         }
     }
 
-    private void processInclude(Element element, DefaultHandler2 formatter) throws TemplateException {
+    private void processInclude(Element element, SAXInterface formatter) throws TemplateException {
         String href = substAttr(element, hrefAttrName);
         if (isEmpty(href))
                 throw new TemplateException(element, "HRef missing");
         URL url = context.getURL();
-        URL includeURL = null;
-        Document included = null;
+        URL includeURL;
+        Document included;
         try {
             includeURL = url == null ? new URL(href) : new URL(url, href);
             included = getDocument(includeURL);
@@ -526,7 +539,7 @@ public class TemplateProcessor {
         context = context.getParent();
     }
 
-    private void processSet(Element element, @SuppressWarnings("unused") DefaultHandler2 formatter)
+    private void processSet(Element element, @SuppressWarnings("unused") SAXInterface formatter)
             throws TemplateException {
         String name = substAttr(element, nameAttrName);
         if (!Expression.isValidIdentifier(name))
@@ -542,7 +555,7 @@ public class TemplateProcessor {
         // otherwise parse as JSON
     }
 
-    private void processIf(Element element, DefaultHandler2 formatter) throws TemplateException {
+    private void processIf(Element element, SAXInterface formatter) throws TemplateException {
         String test = substAttr(element, testAttrName);
         if (isEmpty(test))
             throw new TemplateException(element, "Test must be specified");
@@ -550,14 +563,14 @@ public class TemplateProcessor {
         try {
             testResult = parser.parseExpression(test, context).asBoolean();
         }
-        catch (Expression.ExpressionException e) {
+        catch (ExpressionException e) {
             throw new TemplateException(element, testAttrName, "Error in test - " + test + '\n' + e.getMessage());
         }
         if (testResult)
             processElementContentsNewContext(element, formatter, true);
     }
 
-    private void processSwitch(Element element, DefaultHandler2 formatter) throws TemplateException {
+    private void processSwitch(Element element, SAXInterface formatter) throws TemplateException {
         NodeList childNodes = element.getChildNodes();
         for (int i = 0; i < childNodes.getLength(); i++) {
             Node node = childNodes.item(i);
@@ -571,7 +584,7 @@ public class TemplateProcessor {
                             try {
                                 testResult = parser.parseExpression(test, context).asBoolean();
                             }
-                            catch (Expression.ExpressionException e) {
+                            catch (ExpressionException e) {
                                 throw new TemplateException(childElement, testAttrName,
                                         "Error in test - " + test + '\n' + e.getMessage());
                             }
@@ -591,7 +604,7 @@ public class TemplateProcessor {
         }
     }
 
-    private void processFor(Element element, DefaultHandler2 formatter)
+    private void processFor(Element element, SAXInterface formatter)
             throws TemplateException {
         // TODO document not yet handled
         String name = substAttr(element, nameAttrName);
@@ -624,7 +637,7 @@ public class TemplateProcessor {
             throw new TemplateException(element, "<for> must specify iteration type");
     }
 
-    private void processForSequenceInt(Element element, DefaultHandler2 formatter, String name, Object from, Object to,
+    private void processForSequenceInt(Element element, SAXInterface formatter, String name, Object from, Object to,
             Object by) throws TemplateException {
         // note - "to" value is exclusive; from="0" to="4" will perform 0,1,2,3
         int fromValue = from == null ? 0 : intValue(from, element, fromAttrName, "<for> from value invalid");
@@ -658,12 +671,12 @@ public class TemplateProcessor {
         try {
             return Expression.asInt(obj);
         }
-        catch (Expression.IntCoercionException e) {
+        catch (IntCoercionException e) {
             throw new TemplateException(elem, attrName, msg);
         }
     }
 
-    private void processForSequenceFloat(Element element, DefaultHandler2 formatter, String name, Object from,
+    private void processForSequenceFloat(Element element, SAXInterface formatter, String name, Object from,
             Object to, Object by) throws TemplateException {
         // note - "to" value is exclusive; from="0" to="4" will perform 0,1,2,3
         double fromValue = from == null ? 0.0 : doubleValue(from, element, fromAttrName, "<for> from value invalid");
@@ -697,12 +710,12 @@ public class TemplateProcessor {
         try {
             return Expression.asDouble(obj);
         }
-        catch (Expression.DoubleCoercionException e) {
+        catch (DoubleCoercionException e) {
             throw new TemplateException(elem, attrName, msg);
         }
     }
 
-    private void processForCollection(Element element, DefaultHandler2 formatter, String name, String coll,
+    private void processForCollection(Element element, SAXInterface formatter, String name, String coll,
             String index) throws TemplateException {
         Object collObject = evaluate(coll, element, collectionAttrName);
         if (collObject != null) {
@@ -746,7 +759,7 @@ public class TemplateProcessor {
         }
     }
 
-    private void processCall(Element element, DefaultHandler2 formatter) throws TemplateException {
+    private void processCall(Element element, SAXInterface formatter) throws TemplateException {
         String name = substAttr(element, nameAttrName);
         Element macro = context.getMacro(name);
         if (macro == null)
@@ -769,7 +782,7 @@ public class TemplateProcessor {
                             context.setVariable(name, // must be outer context
                                     parser.parseExpression(value, context).evaluate());
                         }
-                        catch (Expression.ExpressionException e) {
+                        catch (ExpressionException e) {
                             throw new TemplateException(childElement, valueAttrName,
                                     "Error in value - " + value + '\n' + e.getMessage());
                         }
@@ -786,11 +799,11 @@ public class TemplateProcessor {
     }
 
     private void processComment(@SuppressWarnings("unused") Element element,
-            @SuppressWarnings("unused") DefaultHandler2 formatter) {
+            @SuppressWarnings("unused") SAXInterface formatter) {
         // TODO complete this
     }
 
-    private void processCopy(Element element, DefaultHandler2 formatter) throws TemplateException {
+    private void processCopy(Element element, SAXInterface formatter) throws TemplateException {
         String elementName = substAttr(element, elementAttrName);
         if (isEmpty(elementName))
             throw new TemplateException(element, "<copy> element missing");
@@ -840,7 +853,7 @@ public class TemplateProcessor {
         context = context.getParent();
     }
 
-    private void copyElement(Element element, List<Intercept> intercepts, DefaultHandler2 formatter)
+    private void copyElement(Element element, List<Intercept> intercepts, SAXInterface formatter)
             throws TemplateException {
         for (Intercept intercept : intercepts) {
             if (element.getTagName().equals(intercept.getTagName())) {
@@ -871,7 +884,7 @@ public class TemplateProcessor {
         }
     }
 
-    private void copyElementContents(Element element, List<Intercept> intercepts, DefaultHandler2 formatter)
+    private void copyElementContents(Element element, List<Intercept> intercepts, SAXInterface formatter)
             throws TemplateException {
         context = new TemplateContext(context, element);
         NodeList childNodes = element.getChildNodes();
@@ -895,7 +908,7 @@ public class TemplateProcessor {
         context = context.getParent();
     }
 
-    private void outputElement(Element element, DefaultHandler2 formatter) throws TemplateException {
+    private void outputElement(Element element, SAXInterface formatter) throws TemplateException {
         AttributesImpl attrs = new AttributesImpl();
         NamedNodeMap attributes = element.getAttributes();
         for (int i = 0, n = attributes.getLength(); i < n; i++) {
@@ -908,7 +921,7 @@ public class TemplateProcessor {
                         attrs.addAttribute(attr.getNamespaceURI(), attr.getLocalName(), attr.getNodeName(), "CDATA",
                                 substValue);
                 }
-                catch (Expression.ExpressionException eee) {
+                catch (ExpressionException eee) {
                     throw new TemplateException(element, attr.getName(), "Error in expression substitution - " + value);
                 }
             }
@@ -923,17 +936,17 @@ public class TemplateProcessor {
         }
     }
 
-    private void outputText(Text text, String data, DefaultHandler2 formatter) throws TemplateException {
+    private void outputText(Text text, String data, SAXInterface formatter) throws TemplateException {
         try {
             String substData = subst(data);
             outputData(substData, formatter);
         }
-        catch (Expression.ExpressionException eee) {
+        catch (ExpressionException eee) {
             throw new TemplateException(text, "Error in expression substitution" + '\n' + eee.getMessage());
         }
     }
 
-    private void outputData(String data, DefaultHandler2 formatter) {
+    private void outputData(String data, SAXInterface formatter) {
         try {
             formatter.characters(data.toCharArray(), 0, data.length());
         }
@@ -946,7 +959,7 @@ public class TemplateProcessor {
         try {
             return parser.parseExpression(str, context).evaluate();
         }
-        catch (Expression.ExpressionException eee) {
+        catch (ExpressionException eee) {
             throw new TemplateException(element, attrName, "Error in expression evaluation" + '\n' + eee.getMessage());
         }
     }
@@ -955,13 +968,13 @@ public class TemplateProcessor {
         try {
             return subst(element.getAttribute(attrName));
         }
-        catch (Expression.ExpressionException eee) {
+        catch (ExpressionException eee) {
             throw new TemplateException(element, attrName,
                     "Error in expression substitution" + '\n' + eee.getMessage());
         }
     }
 
-    private String subst(String str) throws Expression.ExpressionException {
+    private String subst(String str) throws ExpressionException {
         return str == null ? null : parser.substitute(str, context);
     }
 
@@ -1188,7 +1201,7 @@ public class TemplateProcessor {
 
     public static class ElementWrapper {
 
-        private Element element;
+        private final Element element;
         private List<ElementWrapper> elems;
         private Map<String, Object> attrs;
         private String text;
@@ -1204,10 +1217,12 @@ public class TemplateProcessor {
             return element;
         }
 
+        @SuppressWarnings("unused")
         public String getTagName() {
             return element.getTagName();
         }
 
+        @SuppressWarnings("unused")
         public List<ElementWrapper> getElems() {
             if (elems == null) {
                 elems = new ArrayList<>();
@@ -1221,6 +1236,7 @@ public class TemplateProcessor {
             return elems;
         }
 
+        @SuppressWarnings("unused")
         public Map<String, Object> getAttrs() {
             if (attrs == null) {
                 attrs = new HashMap<>();
@@ -1233,6 +1249,7 @@ public class TemplateProcessor {
             return attrs;
         }
 
+        @SuppressWarnings("unused")
         public String getText() {
             if (text == null) {
                 StringBuilder sb = new StringBuilder();
@@ -1246,7 +1263,7 @@ public class TemplateProcessor {
             if (node instanceof Text)
                 sb.append(((Text)node).getData());
             else if (node instanceof Element) {
-                NodeList children = ((Element)node).getChildNodes();
+                NodeList children = node.getChildNodes();
                 for (int i = 0, n = children.getLength(); i < n; i++)
                     appendData(sb, children.item(i));
             }
@@ -1256,9 +1273,9 @@ public class TemplateProcessor {
 
     public static class Intercept {
 
-        private String tagName;
-        private Element replacement;
-        private String name;
+        private final String tagName;
+        private final Element replacement;
+        private final String name;
 
         public Intercept(String tagName, Element replacement, String name) {
             this.tagName = tagName;
@@ -1276,6 +1293,144 @@ public class TemplateProcessor {
 
         public String getName() {
             return name;
+        }
+
+    }
+
+    public static class HTMLFormatterForXTJ extends HTMLFormatter implements SAXInterface {
+        public HTMLFormatterForXTJ(OutputStream os) {
+            super(os);
+        }
+    }
+
+    public static class XMLFormatterForXTJ extends XMLFormatter implements SAXInterface {
+        public XMLFormatterForXTJ(OutputStream os) {
+            super(os);
+        }
+    }
+
+//    public static class SAX2DOMForXtj extends SAX2DOM implements SAXInterface {
+//        public SAX2DOMForXtj() throws ParserConfigurationException {
+//            super(true);
+//        }
+//    }
+
+    public static class SAX2DOMForXtj implements SAXInterface {
+
+        private final Document document;
+        private final List<Node> nodeStack;
+        private boolean inCDATA;
+
+        public SAX2DOMForXtj() {
+            document = XML.newDocument();
+            nodeStack = new ArrayList<>();
+            nodeStack.add(document);
+            inCDATA = false;
+        }
+
+        public Document getDocument() {
+            return document;
+        }
+
+        private Node topNode() {
+            return nodeStack.get(nodeStack.size() - 1);
+        }
+
+        @Override
+        public void startDocument() {
+        }
+
+        @Override
+        public void startElement(String uri, String localName, String qName, Attributes atts) {
+            Element element;
+            if (uri == null)
+                element = document.createElement(localName);
+            else
+                element = document.createElementNS(uri, qName);
+            topNode().appendChild(element);
+            nodeStack.add(element);
+            if (atts != null) {
+                for (int i = 0, n = atts.getLength(); i < n; i++) {
+                    String attUri = atts.getURI(i);
+                    if (attUri == null)
+                        element.setAttribute(atts.getLocalName(i), atts.getValue(i));
+                    else
+                        element.setAttributeNS(attUri, atts.getQName(i), atts.getValue(i));
+                }
+            }
+        }
+
+        @Override
+        public void endElement(String uri, String localName, String qName) {
+            nodeStack.remove(nodeStack.size() - 1);
+        }
+
+        @Override
+        public void characters(char[] ch, int start, int length) {
+            if (inCDATA)
+                topNode().appendChild(document.createCDATASection(new String(ch, start, length)));
+            else
+                topNode().appendChild(document.createTextNode(new String(ch, start, length)));
+        }
+
+        @Override
+        public void comment(char[] ch, int start, int length) {
+            topNode().appendChild(document.createComment(new String(ch, start, length)));
+        }
+
+        @Override
+        public void startCDATA() {
+            inCDATA = true;
+        }
+
+        @Override
+        public void endCDATA() {
+            inCDATA = false;
+        }
+
+        @Override
+        public void endDocument() {
+        }
+
+        @Override
+        public void startDTD(String name, String publicId, String systemId) {
+        }
+
+        @Override
+        public void endDTD() {
+        }
+
+        @Override
+        public void startEntity(String name) {
+        }
+
+        @Override
+        public void endEntity(String name) {
+        }
+
+        @Override
+        public void startPrefixMapping(String prefix, String uri) {
+        }
+
+        @Override
+        public void endPrefixMapping(String prefix) {
+        }
+
+        @Override
+        public void ignorableWhitespace(char[] ch, int start, int length) {
+            characters(ch, start, length);
+        }
+
+        @Override
+        public void processingInstruction(String target, String data) {
+        }
+
+        @Override
+        public void setDocumentLocator(Locator locator) {
+        }
+
+        @Override
+        public void skippedEntity(String name) {
         }
 
     }

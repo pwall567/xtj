@@ -2,7 +2,7 @@
  * @(#) TemplateContext.java
  *
  * xtj XML Templating for Java
- * Copyright (c) 2015, 2016, 2019 Peter Wall
+ * Copyright (c) 2015, 2016, 2019, 2020 Peter Wall
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -33,21 +33,24 @@ import java.util.Objects;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
+import net.pwall.el.Constant;
 import net.pwall.el.Expression;
+import net.pwall.el.ExtendedResolver;
+import net.pwall.el.Resolver;
 import net.pwall.el.SimpleVariable;
 
 /**
  * Template Context - includes Name Resolver for Expression Language.
  */
-public class TemplateContext implements Expression.ExtendedResolver {
+public class TemplateContext implements ExtendedResolver {
 
     private static final String nameAttrName = "name";
 
-    private TemplateContext parent;
-    private Element element;
-    private Map<String, Expression> map;
-    private Map<String, Element> macros;
-    private Map<String, Object> namespaces;
+    private final TemplateContext parent;
+    private final Element element;
+    private final Map<String, Expression> map;
+    private final Map<String, Element> macros;
+    private final Map<String, Object> namespaces;
     private URL url;
 
     /**
@@ -92,7 +95,7 @@ public class TemplateContext implements Expression.ExtendedResolver {
     }
 
     public void setConstant(String identifier, Object object) {
-        map.put(identifier, new Expression.Constant(object));
+        map.put(identifier, new Constant(object));
     }
 
     /**
@@ -100,7 +103,7 @@ public class TemplateContext implements Expression.ExtendedResolver {
      *
      * @param identifier  the identifier to be resolved
      * @return            a variable, or null if the name can not be resolved
-     * @see     Expression.Resolver#resolve(String)
+     * @see     Resolver#resolve(String)
      */
     @Override
     public Expression resolve(String identifier) {

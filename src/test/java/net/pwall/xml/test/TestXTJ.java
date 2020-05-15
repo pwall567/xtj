@@ -78,4 +78,14 @@ public class TestXTJ {
         }
     }
 
+    @Test
+    public void test2() throws Exception {
+        TemplateProcessor tp = TemplateProcessor.from("src/test/resources/testxhtml.xml");
+        tp.setVariable("content", "Hello, World!");
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        tp.process(baos);
+        byte[] array = baos.toByteArray();
+        System.out.println(new String(array));
+    }
+
 }
