@@ -5,7 +5,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>net.pwall.xml</groupId>
   <artifactId>xtj</artifactId>
-  <version>0.9</version>
+  <version>0.9.3</version>
   <name>xtj</name>
   <description>XML Templating for Java</description>
   <url>https://github.com/pwall567/xtj</url>
@@ -52,7 +52,7 @@
     <dependency>
       <groupId>net.pwall.xml</groupId>
       <artifactId>xmlutil</artifactId>
-      <version>2.1</version>
+      <version>2.2</version>
     </dependency>
     <dependency>
       <groupId>net.pwall.html</groupId>

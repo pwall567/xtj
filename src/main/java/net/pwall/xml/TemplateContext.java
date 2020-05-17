@@ -54,9 +54,10 @@ public class TemplateContext implements ExtendedResolver {
     private URL url;
 
     /**
-     * Construct the <code>TemplateResolver</code>
+     * Construct the <code>TemplateContext</code>
      *
      * @param   parent  the parent context
+     * @param   element the context element
      */
     public TemplateContext(TemplateContext parent, Element element) {
         this.parent = parent;
