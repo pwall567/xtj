@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:xt="http://pwall.net/xml/xt/1.0" xt:output="xml"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://pwall.net/xml/xt/1.0 http://pwall.net/xsd/xt-1.0.xsd">
+  <head>
+    <title>Test XHTML</title>
+  </head>
+  <body>
+    <img src="xyz.png"/>
+    <div>${content}</div>
+  </body>
+</html>

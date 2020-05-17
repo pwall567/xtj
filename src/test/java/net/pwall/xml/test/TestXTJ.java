@@ -39,8 +39,10 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.w3c.dom.Text;
 
+import net.pwall.xml.DOM2SAX;
 import net.pwall.xml.TemplateProcessor;
 import net.pwall.xml.XML;
+import net.pwall.xml.XMLFormatter;
 
 public class TestXTJ {
 
@@ -76,6 +78,33 @@ public class TestXTJ {
                 }
             }
         }
+    }
+
+    @Test
+    public void test2() throws Exception {
+        TemplateProcessor tp = TemplateProcessor.from("src/test/resources/testxhtml.xml");
+        tp.setVariable("content", "Hello, World!");
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        tp.process(baos);
+        byte[] array = baos.toByteArray();
+        System.out.println("Process direct to text");
+        System.out.println(new String(array));
+    }
+
+    @Test
+    public void testToDOM() throws Exception {
+        TemplateProcessor tp = TemplateProcessor.from("src/test/resources/testxhtml.xml");
+        tp.setVariable("content", "Hello, World!");
+        Document document = tp.processToDOM();
+        assertEquals("html", document.getDocumentElement().getTagName());
+        DOM2SAX dom2sax = new DOM2SAX(document);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (XMLFormatter formatter = new XMLFormatter(baos)) {
+            dom2sax.process(formatter);
+        }
+        byte[] array = baos.toByteArray();
+        System.out.println("Process via DOM");
+        System.out.println(new String(array));
     }
 
 }

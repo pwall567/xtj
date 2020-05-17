@@ -3,7 +3,24 @@ Added this change log after project was already under way.  Early changes are no
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
-## [0.7] - 2019-10-23
+## [0.9.3] - 2020-05-17
+### Changed
+- Updated to use `SAX2DOM` from `xmlutil`
+
+## [0.9.2] - 2020-05-15
+### Changed
+- Cosmetic (problem in Nexus upload)
+
+## [0.9.1] - 2020-05-15
+### Changed
+- Minor bug fix
+
+## [0.9] - 2020-05-15
+### Changed
+- Added `processToSAX()` and `processToDOM()` (experimental)
+- Updated `el` version
+
+## [0.8] - 2019-12-03
 ### Added
 - `TemplateContext` and `TemplateException` split out from `TemplateProcessor`
 ### Changed
